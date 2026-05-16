@@ -14,6 +14,15 @@ Live global flight tracking — a Flightradar24-style web app built on free avia
 - **OpenSky Network** — live state vectors (`/api/states/all`, bbox-filtered). Anonymous = 10s resolution / 400 daily credits per IP. Auth = 5s / 4 000 credits.
 - **AeroDataBox** (RapidAPI) — on-demand aircraft metadata (model, airline, image). Free trial 300–600 calls/month. Optional.
 
+## Caching
+
+Two layers of cache protect the AeroDataBox quota; live positions are not cached (always served fresh from the singleton SSE loop).
+
+- **L1 — in-memory `Map`**, 1 h TTL, per-process. Hot path for repeated clicks on the same aircraft.
+- **L2 — Upstash Redis** (optional, free tier), 24 h TTL, shared across instances and survives restarts. Configured via `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`. Falls back to L1-only if not set.
+
+Negative results (AeroDataBox returns nothing for the ICAO24) are cached the same way to avoid burning quota on military/private aircraft repeatedly.
+
 ## Run locally
 
 ```bash
