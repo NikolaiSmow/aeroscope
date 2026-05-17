@@ -32,8 +32,18 @@ export function FlightStream() {
         /* ignore parse errors */
       }
     });
-    es.addEventListener("error", () => setStatus("error"));
-    es.onerror = () => setStatus("error");
+    es.addEventListener("error", (e) => {
+      try {
+        const payload = JSON.parse((e as MessageEvent).data) as { message?: string };
+        const message = payload.message ?? "";
+        setStatus(message.toLowerCase().includes("too many requests") ? "rate-limited" : "error");
+      } catch {
+        if (es.readyState === EventSource.CLOSED) setStatus("error");
+      }
+    });
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) setStatus("error");
+    };
 
     return () => es.close();
   }, [viewBBox, setAircraft, setStatus]);

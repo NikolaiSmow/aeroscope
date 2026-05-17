@@ -6,6 +6,7 @@ const LABELS: Record<string, { text: string; color: string }> = {
   idle: { text: "Idle", color: "bg-zinc-500" },
   connecting: { text: "Connecting…", color: "bg-amber-400" },
   live: { text: "Live", color: "bg-emerald-400" },
+  "rate-limited": { text: "OpenSky limited", color: "bg-yellow-400" },
   error: { text: "Connection error", color: "bg-rose-500" },
 };
 

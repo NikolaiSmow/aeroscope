@@ -7,16 +7,20 @@ type Subscriber = {
   fail: (err: unknown) => void;
 };
 
-const IDLE_INTERVAL_MS = 30_000;
-const ACTIVE_INTERVAL_MS = 10_000;
+const LIVE_CACHE_TTL_MS = 5 * 60_000;
+const ACTIVE_INTERVAL_MS = LIVE_CACHE_TTL_MS;
+const RATE_LIMIT_BACKOFF_MS = 15 * 60_000;
 const WORLD_BBOX: BBox = { lamin: -85, lomin: -180, lamax: 85, lomax: 180 };
+const STREAM_HUB_VERSION = "opensky-cache-v1";
 
 class StreamHub {
   private subscribers = new Map<number, Subscriber>();
   private nextId = 1;
   private timer: NodeJS.Timeout | null = null;
-  private lastTickAt = 0;
+  private lastFetchAt = 0;
+  private lastRateLimitAt = 0;
   private lastPayload: { time: number; aircraft: Aircraft[] } | null = null;
+  private inFlight: Promise<void> | null = null;
 
   subscribe(bbox: BBox | null, send: Subscriber["send"], fail: Subscriber["fail"]): () => void {
     const id = this.nextId++;
@@ -31,7 +35,7 @@ class StreamHub {
 
   private ensureRunning() {
     if (this.timer) return;
-    this.tick();
+    void this.tick();
     this.timer = setInterval(() => this.tick(), ACTIVE_INTERVAL_MS);
   }
 
@@ -59,24 +63,49 @@ class StreamHub {
   }
 
   private async tick() {
+    if (this.inFlight) return this.inFlight;
     if (this.subscribers.size === 0) {
       this.stop();
       return;
     }
     const now = Date.now();
-    if (now - this.lastTickAt < IDLE_INTERVAL_MS / 4) return;
-    this.lastTickAt = now;
-    try {
-      const bbox = this.unionBBox();
-      const payload = await fetchStates(bbox);
-      this.lastPayload = payload;
-      for (const sub of this.subscribers.values()) {
-        const filtered = sub.bbox ? filterToBBox(payload.aircraft, sub.bbox) : payload.aircraft;
-        sub.send({ time: payload.time, aircraft: filtered });
-      }
-    } catch (err) {
-      for (const sub of this.subscribers.values()) sub.fail(err);
+    if (this.lastPayload && now - this.lastFetchAt < LIVE_CACHE_TTL_MS) {
+      this.publish(this.lastPayload);
+      return;
     }
+    if (this.lastPayload && now - this.lastRateLimitAt < RATE_LIMIT_BACKOFF_MS) {
+      this.publish(this.lastPayload);
+      this.notifyError(new Error("Too many requests: serving cached OpenSky data"));
+      return;
+    }
+
+    this.inFlight = (async () => {
+      try {
+        const bbox = this.unionBBox();
+        const payload = await fetchStates(bbox);
+        this.lastFetchAt = Date.now();
+        this.lastPayload = payload;
+        this.publish(payload);
+      } catch (err) {
+        if (isRateLimitError(err)) this.lastRateLimitAt = Date.now();
+        if (this.lastPayload) this.publish(this.lastPayload);
+        this.notifyError(err);
+      } finally {
+        this.inFlight = null;
+      }
+    })();
+    return this.inFlight;
+  }
+
+  private publish(payload: { time: number; aircraft: Aircraft[] }) {
+    for (const sub of this.subscribers.values()) {
+      const filtered = sub.bbox ? filterToBBox(payload.aircraft, sub.bbox) : payload.aircraft;
+      sub.send({ time: payload.time, aircraft: filtered });
+    }
+  }
+
+  private notifyError(err: unknown) {
+    for (const sub of this.subscribers.values()) sub.fail(err);
   }
 }
 
@@ -90,9 +119,18 @@ function filterToBBox(list: Aircraft[], bbox: BBox): Aircraft[] {
   );
 }
 
+function isRateLimitError(err: unknown): boolean {
+  return err instanceof Error && err.message.toLowerCase().includes("too many requests");
+}
+
 declare global {
-  // eslint-disable-next-line no-var
   var __flightStreamHub: StreamHub | undefined;
+  var __flightStreamHubVersion: string | undefined;
+}
+
+if (globalThis.__flightStreamHubVersion !== STREAM_HUB_VERSION) {
+  globalThis.__flightStreamHub = new StreamHub();
+  globalThis.__flightStreamHubVersion = STREAM_HUB_VERSION;
 }
 
 export const streamHub: StreamHub = globalThis.__flightStreamHub ?? new StreamHub();
