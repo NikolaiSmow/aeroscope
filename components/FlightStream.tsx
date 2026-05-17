@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { useFlightStore } from "@/lib/store";
 import type { Aircraft, BBox } from "@/lib/opensky";
 
+const POLL_INTERVAL_MS = 60_000;
+
 function bboxToQuery(bbox: BBox): string {
   return `?lamin=${bbox.lamin}&lomin=${bbox.lomin}&lamax=${bbox.lamax}&lomax=${bbox.lomax}`;
 }
@@ -15,37 +17,38 @@ export function FlightStream() {
 
   useEffect(() => {
     if (!viewBBox) return;
-    setStatus("connecting");
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const url = `/api/stream${bboxToQuery(viewBBox)}`;
-    const es = new EventSource(url);
 
-    es.addEventListener("hello", () => setStatus("connecting"));
-    es.addEventListener("states", (e) => {
+    const poll = async () => {
+      setStatus("connecting");
       try {
-        const payload = JSON.parse((e as MessageEvent).data) as {
+        const res = await fetch(url, { cache: "no-store" });
+        const payload = (await res.json()) as {
           time: number;
           aircraft: Aircraft[];
+          error?: string;
         };
+        if (!res.ok) throw new Error(payload.error ?? "Unable to load OpenSky states");
+        if (cancelled) return;
         setAircraft(payload.aircraft, payload.time);
         setStatus("live");
-      } catch {
-        /* ignore parse errors */
-      }
-    });
-    es.addEventListener("error", (e) => {
-      try {
-        const payload = JSON.parse((e as MessageEvent).data) as { message?: string };
-        const message = payload.message ?? "";
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : "";
         setStatus(message.toLowerCase().includes("too many requests") ? "rate-limited" : "error");
-      } catch {
-        if (es.readyState === EventSource.CLOSED) setStatus("error");
+      } finally {
+        if (!cancelled) timer = setTimeout(poll, POLL_INTERVAL_MS);
       }
-    });
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) setStatus("error");
     };
 
-    return () => es.close();
+    void poll();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [viewBBox, setAircraft, setStatus]);
 
   return null;

@@ -5,7 +5,7 @@ AeroScope is a Next.js web app for live aircraft tracking and lightweight flight
 ## What It Provides
 
 - Live aircraft map with MapLibre, deck.gl, altitude-based aircraft colors, and bright/dark base-map switching.
-- Server-Sent Events stream that fans one cached OpenSky response out to all connected clients.
+- Short-polling aircraft feed that reuses one cached OpenSky response across requests.
 - Manual AeroDataBox lookups for aircraft details, route endpoints, airport timing, and route progress.
 - Search by visible callsign/ICAO24, with a manual AeroDataBox fallback for flight callsigns or flight numbers.
 
@@ -40,7 +40,7 @@ npm run build
 | Route | Purpose |
 | --- | --- |
 | `/` | Map shell and aircraft tracking UI |
-| `/api/stream` | SSE feed for cached OpenSky aircraft states |
+| `/api/stream` | JSON feed for cached OpenSky aircraft states |
 | `/api/aircraft/[icao24]` | AeroDataBox aircraft metadata proxy |
 | `/api/flight-route/[icao24]` | AeroDataBox route lookup by ICAO24/callsign |
 | `/api/flight-search` | AeroDataBox route lookup by flight/callsign query |

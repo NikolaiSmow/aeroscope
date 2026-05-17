@@ -4,7 +4,7 @@
 
 AeroScope is a single Next.js application with a browser map UI and a small Node.js API layer. The core architectural choice is to keep expensive or quota-limited upstream calls behind server-side fan-out and manual user actions:
 
-- OpenSky live positions are fetched by a singleton server process and streamed to all browser clients.
+- OpenSky live positions are fetched by a singleton server process and served from a short-polling JSON endpoint.
 - AeroDataBox enrichment is only requested after explicit user action or search submit.
 - Client-side UI state keeps map interactions responsive while server routes protect API keys and caching behavior.
 
@@ -14,13 +14,13 @@ AeroScope is a single Next.js application with a browser map UI and a small Node
 flowchart TD
   user["User / browser"]
   app["AeroScope<br/>Next.js App Router"]
-  stream["/api/stream<br/>SSE aircraft feed"]
+  stream["/api/stream<br/>cached aircraft feed"]
   metadata["AeroDataBox API routes<br/>aircraft, route, search"]
   opensky["OpenSky Network<br/>live state vectors"]
   aero["AeroDataBox via RapidAPI<br/>aircraft and flight status"]
 
   user -->|"loads map and selects aircraft"| app
-  app -->|"EventSource"| stream
+  app -->|"short polling"| stream
   stream -->|"cached global request"| opensky
   app -->|"manual details/route/search"| metadata
   metadata -->|"server-side API calls"| aero
@@ -28,11 +28,11 @@ flowchart TD
 
 ## Runtime Flow
 
-1. `app/page.tsx` renders `MapShell`, which mounts the dynamic client map, status bar, search box, stream subscriber, and aircraft panel.
+1. `app/page.tsx` renders `MapShell`, which mounts the dynamic client map, status bar, search box, aircraft feed subscriber, and aircraft panel.
 2. `FlightMap` publishes the current map bounding box to Zustand after map load and `moveend`.
-3. `FlightStream` opens an EventSource connection to `/api/stream` with the current bounding box.
-4. `/api/stream` subscribes to `streamHub`, which either reuses recent global OpenSky data or fetches a fresh global snapshot.
-5. The browser receives `states` events and updates the shared aircraft list.
+3. `FlightStream` polls `/api/stream` with the current bounding box.
+4. `/api/stream` asks `streamHub` for a cached global OpenSky snapshot, fetching a fresh one when the 5-minute TTL expires.
+5. The browser receives JSON responses and updates the shared aircraft list.
 6. Selecting an aircraft updates `selectedIcao24`.
 7. Clicking `Load details and route` runs manual TanStack Query fetches against AeroDataBox proxy routes.
 8. Successful route lookup updates `selectedRoute`, which drives both the side-panel progress widget and the map route overlay.
@@ -51,7 +51,7 @@ flowchart TD
 | Component | Responsibility |
 | --- | --- |
 | `components/FlightMap.tsx` | Initializes MapLibre, renders deck.gl aircraft and route layers, map-style switcher, altitude legend |
-| `components/FlightStream.tsx` | Opens SSE connection, parses `states` and `error` events, updates stream status |
+| `components/FlightStream.tsx` | Polls the aircraft feed, parses success/error responses, updates stream status |
 | `components/AircraftPanel.tsx` | Shows selected aircraft live fields, route widget, metadata, and manual AeroDataBox loading |
 | `components/SearchBar.tsx` | Searches visible aircraft locally; falls back to manual AeroDataBox route search |
 | `lib/stream-hub.ts` | Owns OpenSky polling cadence, cache, fan-out, and rate-limit backoff |
@@ -77,7 +77,7 @@ There is no database or shared cache. Server memory caches are best-effort and p
 ## Error Handling and Degradation
 
 - OpenSky rate limits are surfaced as `OpenSky limited`, not a generic connection failure.
-- If cached OpenSky data exists during a rate-limit period, the stream republishes cached aircraft instead of hammering upstream.
+- If cached OpenSky data exists during a rate-limit period, the feed returns cached aircraft instead of hammering upstream.
 - AeroDataBox route and metadata failures return `502` from server routes and are shown as non-blocking panel messages.
 - Missing AeroDataBox keys return empty metadata/route behavior rather than breaking the live map.
 - Empty AeroDataBox browser results are not persisted, so a later valid subscription/key can recover.

@@ -6,7 +6,7 @@ AeroScope exposes internal browser-facing API routes. They are not designed as a
 
 | Route | Method | Purpose |
 | --- | --- | --- |
-| `/api/stream` | `GET` | Server-Sent Events stream of OpenSky aircraft states |
+| `/api/stream` | `GET` | JSON feed of cached OpenSky aircraft states |
 | `/api/aircraft/[icao24]` | `GET` | Aircraft metadata by ICAO24 |
 | `/api/flight-route/[icao24]` | `GET` | Flight route by ICAO24, optionally biased by callsign |
 | `/api/flight-search` | `GET` | Flight route search by callsign, flight number, or ICAO24-like query |
@@ -22,32 +22,27 @@ AeroScope exposes internal browser-facing API routes. They are not designed as a
 | `lamax` | No | North latitude bound |
 | `lomax` | No | East longitude bound |
 
-The upstream OpenSky request is cached globally. When all bounding box values are valid, `/api/stream` filters the cached global aircraft list to that viewport before sending `states` events. If any bounding box value is missing or invalid, the stream sends the cached global list.
+The upstream OpenSky request is cached globally in process memory. When all bounding box values are valid, `/api/stream` filters the cached global aircraft list to that viewport before returning JSON. If any bounding box value is missing or invalid, the route returns the cached global list.
 
-### Events
+### Success Response
 
-Initial hello:
-
-```text
-event: hello
-data: {"ok":true}
+```json
+{
+  "time": 1710000000,
+  "aircraft": [{ "icao24": "0200eb", "callsign": "RAM740X", "latitude": 48.7, "longitude": 2.6 }],
+  "stale": false
+}
 ```
 
-Aircraft payload:
+### Error Response
 
-```text
-event: states
-data: {"time":1710000000,"aircraft":[{"icao24":"0200eb","callsign":"RAM740X","latitude":48.7,"longitude":2.6}]}
+```json
+{
+  "error": "OpenSky 429: Too many requests"
+}
 ```
 
-Upstream error:
-
-```text
-event: error
-data: {"message":"OpenSky 429: Too many requests"}
-```
-
-The stream also emits comment heartbeats every 15 seconds.
+OpenSky rate limits return `429`; other upstream failures return `502`.
 
 ## `/api/aircraft/[icao24]`
 
@@ -157,7 +152,7 @@ The response shape is the same as `/api/flight-route/[icao24]`.
 
 ## Caching and Rate Limits
 
-- `/api/stream` uses server-side in-memory global OpenSky caching, viewport filtering, and SSE headers: `Cache-Control: no-cache, no-transform`.
+- `/api/stream` uses server-side in-memory global OpenSky caching, viewport filtering, and `Cache-Control: no-store`.
 - `/api/aircraft/[icao24]` returns `Cache-Control: public, max-age=2592000, stale-while-revalidate=86400`.
 - `/api/flight-route/[icao24]` and `/api/flight-search` return `Cache-Control: public, max-age=43200, stale-while-revalidate=3600`.
 - AeroDataBox search and route calls use Tier 2 endpoints on the Basic plan. Keep them manual or cache-first.

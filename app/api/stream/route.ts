@@ -24,54 +24,34 @@ function parseBBox(req: Request): BBox | null {
 
 export async function GET(req: Request) {
   const bbox = parseBBox(req);
-  const encoder = new TextEncoder();
+  try {
+    return Response.json(await streamHub.snapshot(bbox), {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return Response.json(
+      { error: message },
+      {
+        status: message.toLowerCase().includes("too many requests") ? 429 : 502,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
+}
 
-  const stream = new ReadableStream({
-    start(controller) {
-      const send = (event: string, data: unknown) => {
-        try {
-          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-        } catch {
-          /* connection closed */
-        }
-      };
+export async function POST(req: Request) {
+  return GET(req);
+}
 
-      send("hello", { ok: true });
-
-      const unsubscribe = streamHub.subscribe(
-        bbox,
-        (payload) => send("states", payload),
-        (err) => send("error", { message: err instanceof Error ? err.message : String(err) }),
-      );
-
-      const heartbeat = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
-        } catch {
-          /* connection closed */
-        }
-      }, 15_000);
-
-      const close = () => {
-        clearInterval(heartbeat);
-        unsubscribe();
-        try {
-          controller.close();
-        } catch {
-          /* already closed */
-        }
-      };
-
-      req.signal.addEventListener("abort", close);
-    },
-  });
-
-  return new Response(stream, {
+export function OPTIONS() {
+  return new Response(null, {
     headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
+      Allow: "GET, POST, OPTIONS",
     },
   });
 }

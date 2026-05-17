@@ -4,7 +4,7 @@
 
 AeroScope is a Next.js App Router application. It requires a Node.js runtime for all API routes:
 
-- `/api/stream` uses Server-Sent Events and a process-local singleton.
+- `/api/stream` uses short polling and a process-local singleton cache.
 - AeroDataBox routes use server-side secrets and process-local memory caching.
 
 When deploying to Vercel, use the `rumble-ai` team by default unless another team is specified. If Vercel Functions regions are configured, prefer GDPR-friendly European regions: Paris (`cdg1`), Dublin (`dub1`), and Frankfurt (`fra1`).
@@ -44,13 +44,13 @@ There is no dedicated telemetry integration yet. Start with:
 
 - Browser status pill: `Connecting`, `Live`, `OpenSky limited`, or `Connection error`.
 - Dev server logs in `.next/dev/logs/next-development.log`.
-- Network tab for SSE `/api/stream` events.
+- Network tab for `/api/stream` JSON responses.
 - Server route responses for `502` error messages from AeroDataBox.
 
 Useful manual checks:
 
 ```bash
-curl -i -N 'http://localhost:3000/api/stream?lamin=45&lomin=5&lamax=55&lomax=15'
+curl -i 'http://localhost:3000/api/stream?lamin=45&lomin=5&lamax=55&lomax=15'
 curl 'http://localhost:3000/api/flight-search?q=RAM740X'
 curl 'http://localhost:3000/api/flight-route/0200eb?callsign=RAM740X'
 ```

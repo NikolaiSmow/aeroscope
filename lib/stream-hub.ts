@@ -11,6 +11,7 @@ const LIVE_CACHE_TTL_MS = 5 * 60_000;
 const ACTIVE_INTERVAL_MS = LIVE_CACHE_TTL_MS;
 const RATE_LIMIT_BACKOFF_MS = 15 * 60_000;
 const STREAM_HUB_VERSION = "opensky-global-cache-v1";
+type Snapshot = { time: number; aircraft: Aircraft[]; stale: boolean };
 
 class StreamHub {
   private subscribers = new Map<number, Subscriber>();
@@ -20,6 +21,16 @@ class StreamHub {
   private lastRateLimitAt = 0;
   private lastPayload: { time: number; aircraft: Aircraft[] } | null = null;
   private inFlight: Promise<void> | null = null;
+  private fetchPromise: Promise<{ time: number; aircraft: Aircraft[] }> | null = null;
+
+  async snapshot(bbox: BBox | null): Promise<Snapshot> {
+    const payload = await this.ensurePayload();
+    return {
+      time: payload.time,
+      aircraft: bbox ? filterToBBox(payload.aircraft, bbox) : payload.aircraft,
+      stale: Date.now() - this.lastFetchAt >= LIVE_CACHE_TTL_MS,
+    };
+  }
 
   subscribe(bbox: BBox | null, send: Subscriber["send"], fail: Subscriber["fail"]): () => void {
     const id = this.nextId++;
@@ -64,9 +75,7 @@ class StreamHub {
 
     this.inFlight = (async () => {
       try {
-        const payload = await fetchStates();
-        this.lastFetchAt = Date.now();
-        this.lastPayload = payload;
+        const payload = await this.ensurePayload();
         this.publish(payload);
       } catch (err) {
         if (isRateLimitError(err)) this.lastRateLimitAt = Date.now();
@@ -77,6 +86,30 @@ class StreamHub {
       }
     })();
     return this.inFlight;
+  }
+
+  private async ensurePayload(): Promise<{ time: number; aircraft: Aircraft[] }> {
+    const now = Date.now();
+    if (this.lastPayload && now - this.lastFetchAt < LIVE_CACHE_TTL_MS) return this.lastPayload;
+    if (this.lastPayload && now - this.lastRateLimitAt < RATE_LIMIT_BACKOFF_MS) return this.lastPayload;
+    if (this.fetchPromise) return this.fetchPromise;
+
+    this.fetchPromise = fetchStates()
+      .then((payload) => {
+        this.lastFetchAt = Date.now();
+        this.lastPayload = payload;
+        return payload;
+      })
+      .catch((err) => {
+        if (isRateLimitError(err)) this.lastRateLimitAt = Date.now();
+        if (this.lastPayload) return this.lastPayload;
+        throw err;
+      })
+      .finally(() => {
+        this.fetchPromise = null;
+      });
+
+    return this.fetchPromise;
   }
 
   private publish(payload: { time: number; aircraft: Aircraft[] }) {

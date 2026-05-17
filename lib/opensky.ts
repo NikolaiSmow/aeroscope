@@ -60,7 +60,6 @@ type TokenResponse = {
 };
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
-let tokenPromise: Promise<string | null> | null = null;
 
 function timeoutSignal(signal?: AbortSignal): { signal: AbortSignal; clear: () => void } {
   const controller = new AbortController();
@@ -87,44 +86,37 @@ async function fetchAccessToken(): Promise<string | null> {
     return tokenCache.token;
   }
 
-  if (tokenPromise) return tokenPromise;
-
-  tokenPromise = (async () => {
-    const timeout = timeoutSignal();
-    try {
-      const body = new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: clientId,
-        client_secret: clientSecret,
-      });
-      const res = await fetch(TOKEN_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body,
-        signal: timeout.signal,
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        throw new Error(`OpenSky auth ${res.status}: ${await res.text().catch(() => "")}`);
-      }
-      const data = (await res.json()) as TokenResponse;
-      tokenCache = {
-        token: data.access_token,
-        expiresAt: Date.now() + (data.expires_in ?? 1800) * 1000,
-      };
-      return tokenCache.token;
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        throw new Error("OpenSky auth request timed out");
-      }
-      throw err;
-    } finally {
-      timeout.clear();
-      tokenPromise = null;
+  const timeout = timeoutSignal();
+  try {
+    const body = new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+    const res = await fetch(TOKEN_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      signal: timeout.signal,
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new Error(`OpenSky auth ${res.status}: ${await res.text().catch(() => "")}`);
     }
-  })();
-
-  return tokenPromise;
+    const data = (await res.json()) as TokenResponse;
+    tokenCache = {
+      token: data.access_token,
+      expiresAt: Date.now() + (data.expires_in ?? 1800) * 1000,
+    };
+    return tokenCache.token;
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("OpenSky auth request timed out");
+    }
+    throw err;
+  } finally {
+    timeout.clear();
+  }
 }
 
 async function authHeader(): Promise<Record<string, string>> {
