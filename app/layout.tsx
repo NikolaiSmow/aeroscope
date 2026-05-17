@@ -21,8 +21,12 @@ export const metadata: Metadata = {
     follow: false,
   },
   icons: {
-    icon: "/aeroscope-mark.svg",
-    apple: "/aeroscope-mark.svg",
+    icon: [
+      { url: "/favicon.ico", sizes: "16x16 32x32" },
+      { url: "/aeroscope-mark.svg", type: "image/svg+xml" },
+      { url: "/aeroscope-icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/aeroscope-apple-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
