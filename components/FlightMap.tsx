@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { IconLayer, LineLayer } from "@deck.gl/layers";
@@ -8,7 +8,17 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useFlightStore } from "@/lib/store";
 import type { Aircraft } from "@/lib/opensky";
 
-const TILE_STYLE = "https://tiles.openfreemap.org/styles/dark";
+const MAP_STYLES = {
+  bright: {
+    label: "Bright",
+    url: "https://tiles.openfreemap.org/styles/bright",
+  },
+  dark: {
+    label: "Dark",
+    url: "https://tiles.openfreemap.org/styles/dark",
+  },
+} as const;
+type MapStyleKey = keyof typeof MAP_STYLES;
 const ALTITUDE_STOPS = [
   { feet: 0, color: [249, 115, 22, 240] },
   { feet: 1_000, color: [245, 158, 11, 240] },
@@ -127,10 +137,38 @@ function AltitudeLegend() {
   );
 }
 
+function MapStyleControl({
+  value,
+  onChange,
+}: {
+  value: MapStyleKey;
+  onChange: (value: MapStyleKey) => void;
+}) {
+  return (
+    <div className="pointer-events-auto absolute bottom-20 left-4 z-20 flex overflow-hidden rounded-md border border-white/15 bg-zinc-950/75 p-0.5 text-xs shadow-2xl backdrop-blur">
+      {(Object.keys(MAP_STYLES) as MapStyleKey[]).map((key) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onChange(key)}
+          className={`rounded px-3 py-1.5 font-medium transition ${
+            value === key
+              ? "bg-white text-zinc-950"
+              : "text-zinc-300 hover:bg-white/10 hover:text-white"
+          }`}
+        >
+          {MAP_STYLES[key].label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function FlightMap() {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [mapStyle, setMapStyle] = useState<MapStyleKey>("bright");
   const iconUrl = useMemo(() => {
     if (typeof document === "undefined") return null;
     return buildPlaneIconDataUrl();
@@ -146,10 +184,10 @@ export function FlightMap() {
     if (!containerRef.current) return;
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: TILE_STYLE,
+      style: MAP_STYLES.bright.url,
       center: [10, 50],
       zoom: 4,
-      attributionControl: { compact: true },
+      attributionControl: false,
     });
     mapRef.current = map;
 
@@ -157,6 +195,7 @@ export function FlightMap() {
     overlayRef.current = overlay;
     map.addControl(overlay as unknown as maplibregl.IControl);
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
 
     const publishBBox = () => {
       const b = map.getBounds();
@@ -176,6 +215,12 @@ export function FlightMap() {
       overlayRef.current = null;
     };
   }, [setBBox]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.setStyle(MAP_STYLES[mapStyle].url);
+  }, [mapStyle]);
 
   const layers = useMemo(() => {
     if (!iconUrl) return [];
@@ -253,6 +298,7 @@ export function FlightMap() {
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
+      <MapStyleControl value={mapStyle} onChange={setMapStyle} />
       <AltitudeLegend />
     </div>
   );
