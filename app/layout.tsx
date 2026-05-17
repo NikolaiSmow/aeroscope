@@ -13,9 +13,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Flight Tracker — Live aircraft positions",
-  description: "Real-time global flight tracking powered by OpenSky Network.",
+  title: "AeroScope — Live aircraft positions",
+  description: "Real-time global flight intelligence powered by OpenSky Network.",
   manifest: "/manifest.webmanifest",
+  robots: {
+    index: false,
+    follow: false,
+  },
+  icons: {
+    icon: "/aeroscope-mark.svg",
+    apple: "/aeroscope-mark.svg",
+  },
 };
 
 export const viewport: Viewport = {

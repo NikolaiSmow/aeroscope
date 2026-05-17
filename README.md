@@ -1,6 +1,6 @@
-# Flight Tracker
+# AeroScope
 
-Live global flight tracking — a Flightradar24-style web app built on free aviation APIs.
+Live global aircraft intelligence — a Flightradar24-style web app built on free aviation APIs.
 
 ## Stack
 
