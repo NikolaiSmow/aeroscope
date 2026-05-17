@@ -49,13 +49,63 @@ type RawStatesResponse = {
 };
 
 const ENDPOINT = "https://opensky-network.org/api/states/all";
+const TOKEN_ENDPOINT =
+  "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
+const TOKEN_REFRESH_MARGIN_MS = 30_000;
 
-function authHeader(): Record<string, string> {
-  const user = process.env.OPENSKY_USER;
-  const pass = process.env.OPENSKY_PASS;
-  if (!user || !pass) return {};
-  const token = Buffer.from(`${user}:${pass}`).toString("base64");
-  return { Authorization: `Basic ${token}` };
+type TokenResponse = {
+  access_token: string;
+  expires_in?: number;
+};
+
+let tokenCache: { token: string; expiresAt: number } | null = null;
+let tokenPromise: Promise<string | null> | null = null;
+
+async function fetchAccessToken(): Promise<string | null> {
+  const clientId = process.env.OPENSKY_CLIENT_ID;
+  const clientSecret = process.env.OPENSKY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  const now = Date.now();
+  if (tokenCache && tokenCache.expiresAt - TOKEN_REFRESH_MARGIN_MS > now) {
+    return tokenCache.token;
+  }
+
+  if (tokenPromise) return tokenPromise;
+
+  tokenPromise = (async () => {
+    try {
+      const body = new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+      });
+      const res = await fetch(TOKEN_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        throw new Error(`OpenSky auth ${res.status}: ${await res.text().catch(() => "")}`);
+      }
+      const data = (await res.json()) as TokenResponse;
+      tokenCache = {
+        token: data.access_token,
+        expiresAt: Date.now() + (data.expires_in ?? 1800) * 1000,
+      };
+      return tokenCache.token;
+    } finally {
+      tokenPromise = null;
+    }
+  })();
+
+  return tokenPromise;
+}
+
+async function authHeader(): Promise<Record<string, string>> {
+  const token = await fetchAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export async function fetchStates(bbox?: BBox, signal?: AbortSignal): Promise<{ time: number; aircraft: Aircraft[] }> {
@@ -67,7 +117,7 @@ export async function fetchStates(bbox?: BBox, signal?: AbortSignal): Promise<{ 
     url.searchParams.set("lomax", String(bbox.lomax));
   }
   const res = await fetch(url, {
-    headers: { Accept: "application/json", ...authHeader() },
+    headers: { Accept: "application/json", ...(await authHeader()) },
     signal,
     cache: "no-store",
   });

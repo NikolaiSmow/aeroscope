@@ -13,8 +13,8 @@ When deploying to Vercel, use the `rumble-ai` team by default unless another tea
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `OPENSKY_USER` | No | OpenSky username for higher quota than anonymous mode |
-| `OPENSKY_PASS` | No | OpenSky password |
+| `OPENSKY_CLIENT_ID` | No | OpenSky OAuth2 API client ID for higher quota than anonymous mode |
+| `OPENSKY_CLIENT_SECRET` | No | OpenSky OAuth2 API client secret |
 | `RAPIDAPI_KEY` | No | AeroDataBox RapidAPI key for metadata and route lookups |
 | `NEXT_PUBLIC_HAS_METADATA_KEY` | No | UI hint flag; set to `1` when `RAPIDAPI_KEY` is configured |
 | `UPSTASH_REDIS_REST_URL` | No | Optional shared AeroDataBox cache URL |
