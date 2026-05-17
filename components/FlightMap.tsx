@@ -19,16 +19,18 @@ const MAP_STYLES = {
   },
 } as const;
 type MapStyleKey = keyof typeof MAP_STYLES;
-const ALTITUDE_STOPS = [
-  { feet: 0, color: [249, 115, 22, 240] },
-  { feet: 1_000, color: [245, 158, 11, 240] },
-  { feet: 4_000, color: [234, 179, 8, 240] },
-  { feet: 8_000, color: [132, 204, 22, 240] },
-  { feet: 10_000, color: [34, 197, 94, 240] },
-  { feet: 20_000, color: [14, 165, 233, 240] },
-  { feet: 30_000, color: [99, 102, 241, 240] },
-  { feet: 40_000, color: [217, 70, 239, 240] },
-] satisfies { feet: number; color: [number, number, number, number] }[];
+const ALTITUDE_CATEGORIES = [
+  { label: "Ground", maxFeet: 0, color: [148, 163, 184, 220], hex: "#94a3b8" },
+  { label: "0-10k", maxFeet: 10_000, color: [217, 119, 6, 230], hex: "#d97706" },
+  { label: "10-20k", maxFeet: 20_000, color: [101, 163, 13, 230], hex: "#65a30d" },
+  { label: "20-30k", maxFeet: 30_000, color: [8, 145, 178, 230], hex: "#0891b2" },
+  { label: "30k+", maxFeet: Infinity, color: [79, 70, 229, 230], hex: "#4f46e5" },
+] satisfies {
+  label: string;
+  maxFeet: number;
+  color: [number, number, number, number];
+  hex: string;
+}[];
 
 function buildPlaneIconDataUrl(): string {
   const size = 64;
@@ -86,34 +88,16 @@ function altitudeFeet(aircraft: Aircraft): number | null {
   return meters === null ? null : meters * 3.28084;
 }
 
-function mixColor(
-  from: [number, number, number, number],
-  to: [number, number, number, number],
-  t: number,
-): [number, number, number, number] {
-  return [
-    Math.round(from[0] + (to[0] - from[0]) * t),
-    Math.round(from[1] + (to[1] - from[1]) * t),
-    Math.round(from[2] + (to[2] - from[2]) * t),
-    Math.round(from[3] + (to[3] - from[3]) * t),
-  ];
-}
-
 function altitudeColor(aircraft: Aircraft): [number, number, number, number] {
-  if (aircraft.onGround) return [148, 163, 184, 220];
+  const unknownCategory = ALTITUDE_CATEGORIES[0].color;
+  if (aircraft.onGround) return unknownCategory;
   const feet = altitudeFeet(aircraft);
-  if (feet === null) return [203, 213, 225, 220];
+  if (feet === null) return unknownCategory;
 
-  for (let i = 0; i < ALTITUDE_STOPS.length - 1; i++) {
-    const current = ALTITUDE_STOPS[i];
-    const next = ALTITUDE_STOPS[i + 1];
-    if (feet >= current.feet && feet <= next.feet) {
-      const span = next.feet - current.feet;
-      return mixColor(current.color, next.color, span ? (feet - current.feet) / span : 0);
-    }
-  }
-
-  return ALTITUDE_STOPS[ALTITUDE_STOPS.length - 1].color;
+  return (
+    ALTITUDE_CATEGORIES.slice(1).find((category) => feet <= category.maxFeet)?.color ??
+    ALTITUDE_CATEGORIES[ALTITUDE_CATEGORIES.length - 1].color
+  );
 }
 
 function AltitudeLegend() {
@@ -122,16 +106,17 @@ function AltitudeLegend() {
       <div className="mb-1 flex items-center justify-between">
         <span className="font-semibold uppercase tracking-normal text-zinc-400">Altitude (ft)</span>
       </div>
-      <div className="h-2 rounded-sm bg-[linear-gradient(90deg,#f97316_0%,#f59e0b_10%,#eab308_22%,#84cc16_38%,#22c55e_50%,#0ea5e9_68%,#6366f1_84%,#d946ef_100%)]" />
-      <div className="mt-1 flex justify-between text-zinc-400">
-        <span>0</span>
-        <span>1k</span>
-        <span>4k</span>
-        <span>8k</span>
-        <span>10k</span>
-        <span>20k</span>
-        <span>30k</span>
-        <span>40k+</span>
+      <div className="grid grid-cols-5 gap-1">
+        {ALTITUDE_CATEGORIES.map((category) => (
+          <div key={category.label} className="h-2 rounded-sm" style={{ backgroundColor: category.hex }} />
+        ))}
+      </div>
+      <div className="mt-1 grid grid-cols-5 gap-1 text-center text-zinc-400">
+        {ALTITUDE_CATEGORIES.map((category) => (
+          <span key={category.label} className="truncate">
+            {category.label}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -263,6 +248,24 @@ export function FlightMap() {
     return [
       ...routeLayers,
       new IconLayer<Aircraft>({
+        id: "aircraft-border",
+        data: aircraft,
+        pickable: false,
+        iconAtlas: iconUrl,
+        iconMapping: {
+          plane: { x: 0, y: 0, width: 64, height: 64, mask: true, anchorX: 32, anchorY: 32 },
+        },
+        getIcon: () => "plane",
+        sizeUnits: "pixels",
+        getSize: (d) => (d.icao24 === selectedIcao24 ? 38 : 22),
+        getPosition: (d) => [d.longitude, d.latitude],
+        getAngle: (d) => -(d.trueTrack ?? 0),
+        getColor: [5, 5, 7, 230],
+        updateTriggers: {
+          getSize: selectedIcao24,
+        },
+      }),
+      new IconLayer<Aircraft>({
         id: "aircraft",
         data: aircraft,
         pickable: true,
@@ -275,13 +278,9 @@ export function FlightMap() {
         getSize: (d) => (d.icao24 === selectedIcao24 ? 32 : 18),
         getPosition: (d) => [d.longitude, d.latitude],
         getAngle: (d) => -(d.trueTrack ?? 0),
-        getColor: (d) => {
-          if (d.icao24 === selectedIcao24) return [37, 99, 235, 255];
-          return altitudeColor(d);
-        },
+        getColor: altitudeColor,
         updateTriggers: {
           getSize: selectedIcao24,
-          getColor: selectedIcao24,
         },
         onClick: (info) => {
           const d = info.object as Aircraft | undefined;

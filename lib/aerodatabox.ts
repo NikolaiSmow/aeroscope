@@ -1,5 +1,3 @@
-import { Redis } from "@upstash/redis";
-
 export type AircraftMetadata = {
   icao24: string;
   registration: string | null;
@@ -81,30 +79,11 @@ type RawFlightResponse = {
 };
 
 const HOST = "aerodatabox.p.rapidapi.com";
-const KEY_PREFIX = "ft:aircraft:";
-const ROUTE_KEY_PREFIX = "ft:route:";
-const L1_TTL_MS = 24 * 60 * 60 * 1000;
-const L2_TTL_SEC = 30 * 24 * 60 * 60;
+const METADATA_TTL_MS = 24 * 60 * 60 * 1000;
 const ROUTE_TTL_MS = 12 * 60 * 60 * 1000;
-const ROUTE_TTL_SEC = 12 * 60 * 60;
 
-type Envelope = { data: AircraftMetadata | null };
-type RouteEnvelope = { data: FlightRoute | null };
-
-const l1 = new Map<string, { at: number; data: AircraftMetadata | null }>();
-const routeL1 = new Map<string, { at: number; data: FlightRoute | null }>();
-
-let redisInstance: Redis | null = null;
-let redisChecked = false;
-function getRedis(): Redis | null {
-  if (redisChecked) return redisInstance;
-  redisChecked = true;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  redisInstance = new Redis({ url, token });
-  return redisInstance;
-}
+const metadataCache = new Map<string, { at: number; data: AircraftMetadata | null }>();
+const routeCache = new Map<string, { at: number; data: FlightRoute | null }>();
 
 function rapidHeaders(): Record<string, string> | null {
   const key = process.env.RAPIDAPI_KEY;
@@ -150,32 +129,11 @@ async function fetchFromUpstream(icao24: string): Promise<AircraftMetadata | nul
 export async function fetchAircraftMetadata(icao24: string): Promise<AircraftMetadata | null> {
   const key = icao24.toLowerCase();
 
-  const l1Hit = l1.get(key);
-  if (l1Hit && Date.now() - l1Hit.at < L1_TTL_MS) return l1Hit.data;
-
-  const redis = getRedis();
-  if (redis) {
-    try {
-      const envelope = await redis.get<Envelope>(KEY_PREFIX + key);
-      if (envelope) {
-        l1.set(key, { at: Date.now(), data: envelope.data });
-        return envelope.data;
-      }
-    } catch {
-      /* fall through to upstream on transient Redis error */
-    }
-  }
+  const cached = metadataCache.get(key);
+  if (cached && Date.now() - cached.at < METADATA_TTL_MS) return cached.data;
 
   const data = await fetchFromUpstream(key);
-
-  l1.set(key, { at: Date.now(), data });
-  if (redis) {
-    redis
-      .set(KEY_PREFIX + key, { data } satisfies Envelope, { ex: L2_TTL_SEC })
-      .catch(() => {
-        /* best-effort write-back */
-      });
-  }
+  metadataCache.set(key, { at: Date.now(), data });
   return data;
 }
 
@@ -233,35 +191,15 @@ export async function fetchFlightRoute(params: {
 }): Promise<FlightRoute | null> {
   const key = (params.callsign || params.icao24).toLowerCase();
 
-  const l1Hit = routeL1.get(key);
-  if (l1Hit && Date.now() - l1Hit.at < ROUTE_TTL_MS) return l1Hit.data;
-
-  const redis = getRedis();
-  if (redis) {
-    try {
-      const envelope = await redis.get<RouteEnvelope>(ROUTE_KEY_PREFIX + key);
-      if (envelope) {
-        routeL1.set(key, { at: Date.now(), data: envelope.data });
-        return envelope.data;
-      }
-    } catch {
-      /* fall through to upstream on transient Redis error */
-    }
-  }
+  const cached = routeCache.get(key);
+  if (cached && Date.now() - cached.at < ROUTE_TTL_MS) return cached.data;
 
   const normalizedCallsign = params.callsign?.replace(/\s+/g, "");
   const data = normalizedCallsign
     ? (await fetchRouteBy("CallSign", normalizedCallsign)) ?? (await fetchRouteBy("Icao24", params.icao24))
     : await fetchRouteBy("Icao24", params.icao24);
 
-  routeL1.set(key, { at: Date.now(), data });
-  if (redis) {
-    redis
-      .set(ROUTE_KEY_PREFIX + key, { data } satisfies RouteEnvelope, { ex: ROUTE_TTL_SEC })
-      .catch(() => {
-        /* best-effort write-back */
-      });
-  }
+  routeCache.set(key, { at: Date.now(), data });
   return data;
 }
 
@@ -270,33 +208,13 @@ export async function searchFlightRoute(query: string): Promise<FlightRoute | nu
   if (!normalized) return null;
 
   const key = `search:${normalized.toLowerCase()}`;
-  const l1Hit = routeL1.get(key);
-  if (l1Hit && Date.now() - l1Hit.at < ROUTE_TTL_MS) return l1Hit.data;
-
-  const redis = getRedis();
-  if (redis) {
-    try {
-      const envelope = await redis.get<RouteEnvelope>(ROUTE_KEY_PREFIX + key);
-      if (envelope) {
-        routeL1.set(key, { at: Date.now(), data: envelope.data });
-        return envelope.data;
-      }
-    } catch {
-      /* fall through to upstream on transient Redis error */
-    }
-  }
+  const cached = routeCache.get(key);
+  if (cached && Date.now() - cached.at < ROUTE_TTL_MS) return cached.data;
 
   const data = /^[0-9a-f]{6}$/i.test(normalized)
     ? await fetchRouteBy("Icao24", normalized)
     : (await fetchRouteBy("CallSign", normalized)) ?? (await fetchRouteBy("Number", normalized));
 
-  routeL1.set(key, { at: Date.now(), data });
-  if (redis) {
-    redis
-      .set(ROUTE_KEY_PREFIX + key, { data } satisfies RouteEnvelope, { ex: ROUTE_TTL_SEC })
-      .catch(() => {
-        /* best-effort write-back */
-      });
-  }
+  routeCache.set(key, { at: Date.now(), data });
   return data;
 }

@@ -16,7 +16,7 @@ AeroScope is a Next.js web app for live aircraft tracking and lightweight flight
 - **MapLibre GL** and **deck.gl** for map rendering
 - **Zustand** for client UI state
 - **TanStack Query** for manual metadata/route query state
-- **OpenSky Network**, **AeroDataBox**, and optional **Upstash Redis**
+- **OpenSky Network** and **AeroDataBox**
 
 ## Local Development
 
@@ -50,6 +50,7 @@ npm run build
 - [Architecture](docs/architecture.md)
 - [Integration/API](docs/integration.md)
 - [Operations](docs/operations.md)
+- [Open Issues](docs/open-issues.md)
 - [Changelog](docs/CHANGELOG.md)
 
 ## Key Files

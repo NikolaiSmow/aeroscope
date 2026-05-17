@@ -52,6 +52,7 @@ const ENDPOINT = "https://opensky-network.org/api/states/all";
 const TOKEN_ENDPOINT =
   "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
 const TOKEN_REFRESH_MARGIN_MS = 30_000;
+const OPENSKY_TIMEOUT_MS = 15_000;
 
 type TokenResponse = {
   access_token: string;
@@ -60,6 +61,21 @@ type TokenResponse = {
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
 let tokenPromise: Promise<string | null> | null = null;
+
+function timeoutSignal(signal?: AbortSignal): { signal: AbortSignal; clear: () => void } {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OPENSKY_TIMEOUT_MS);
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+  }
+
+  return { signal: controller.signal, clear: () => clearTimeout(timeout) };
+}
 
 async function fetchAccessToken(): Promise<string | null> {
   const clientId = process.env.OPENSKY_CLIENT_ID;
@@ -74,6 +90,7 @@ async function fetchAccessToken(): Promise<string | null> {
   if (tokenPromise) return tokenPromise;
 
   tokenPromise = (async () => {
+    const timeout = timeoutSignal();
     try {
       const body = new URLSearchParams({
         grant_type: "client_credentials",
@@ -84,6 +101,7 @@ async function fetchAccessToken(): Promise<string | null> {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body,
+        signal: timeout.signal,
         cache: "no-store",
       });
       if (!res.ok) {
@@ -95,7 +113,13 @@ async function fetchAccessToken(): Promise<string | null> {
         expiresAt: Date.now() + (data.expires_in ?? 1800) * 1000,
       };
       return tokenCache.token;
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error("OpenSky auth request timed out");
+      }
+      throw err;
     } finally {
+      timeout.clear();
       tokenPromise = null;
     }
   })();
@@ -116,11 +140,22 @@ export async function fetchStates(bbox?: BBox, signal?: AbortSignal): Promise<{ 
     url.searchParams.set("lamax", String(bbox.lamax));
     url.searchParams.set("lomax", String(bbox.lomax));
   }
-  const res = await fetch(url, {
-    headers: { Accept: "application/json", ...(await authHeader()) },
-    signal,
-    cache: "no-store",
-  });
+  const timeout = timeoutSignal(signal);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { Accept: "application/json", ...(await authHeader()) },
+      signal: timeout.signal,
+      cache: "no-store",
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("OpenSky states request timed out");
+    }
+    throw err;
+  } finally {
+    timeout.clear();
+  }
   if (!res.ok) {
     throw new Error(`OpenSky ${res.status}: ${await res.text().catch(() => "")}`);
   }

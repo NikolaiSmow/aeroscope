@@ -10,8 +10,7 @@ type Subscriber = {
 const LIVE_CACHE_TTL_MS = 5 * 60_000;
 const ACTIVE_INTERVAL_MS = LIVE_CACHE_TTL_MS;
 const RATE_LIMIT_BACKOFF_MS = 15 * 60_000;
-const WORLD_BBOX: BBox = { lamin: -85, lomin: -180, lamax: 85, lomax: 180 };
-const STREAM_HUB_VERSION = "opensky-cache-v1";
+const STREAM_HUB_VERSION = "opensky-global-cache-v1";
 
 class StreamHub {
   private subscribers = new Map<number, Subscriber>();
@@ -46,22 +45,6 @@ class StreamHub {
     }
   }
 
-  private unionBBox(): BBox {
-    let bbox: BBox | null = null;
-    for (const sub of this.subscribers.values()) {
-      if (!sub.bbox) return WORLD_BBOX;
-      if (!bbox) {
-        bbox = { ...sub.bbox };
-      } else {
-        bbox.lamin = Math.min(bbox.lamin, sub.bbox.lamin);
-        bbox.lomin = Math.min(bbox.lomin, sub.bbox.lomin);
-        bbox.lamax = Math.max(bbox.lamax, sub.bbox.lamax);
-        bbox.lomax = Math.max(bbox.lomax, sub.bbox.lomax);
-      }
-    }
-    return bbox ?? WORLD_BBOX;
-  }
-
   private async tick() {
     if (this.inFlight) return this.inFlight;
     if (this.subscribers.size === 0) {
@@ -81,8 +64,7 @@ class StreamHub {
 
     this.inFlight = (async () => {
       try {
-        const bbox = this.unionBBox();
-        const payload = await fetchStates(bbox);
+        const payload = await fetchStates();
         this.lastFetchAt = Date.now();
         this.lastPayload = payload;
         this.publish(payload);

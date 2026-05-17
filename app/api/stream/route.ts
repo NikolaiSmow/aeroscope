@@ -3,6 +3,7 @@ import type { BBox } from "@/lib/opensky";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const preferredRegion = ["fra1", "cdg1", "dub1"];
 
 function parseBBox(req: Request): BBox | null {
   const url = new URL(req.url);

@@ -22,7 +22,7 @@ AeroScope exposes internal browser-facing API routes. They are not designed as a
 | `lamax` | No | North latitude bound |
 | `lomax` | No | East longitude bound |
 
-If any bounding box value is missing or invalid, the stream uses a world bounding box.
+The upstream OpenSky request is cached globally. When all bounding box values are valid, `/api/stream` filters the cached global aircraft list to that viewport before sending `states` events. If any bounding box value is missing or invalid, the stream sends the cached global list.
 
 ### Events
 
@@ -157,7 +157,7 @@ The response shape is the same as `/api/flight-route/[icao24]`.
 
 ## Caching and Rate Limits
 
-- `/api/stream` uses server-side in-memory OpenSky caching and SSE headers: `Cache-Control: no-cache, no-transform`.
+- `/api/stream` uses server-side in-memory global OpenSky caching, viewport filtering, and SSE headers: `Cache-Control: no-cache, no-transform`.
 - `/api/aircraft/[icao24]` returns `Cache-Control: public, max-age=2592000, stale-while-revalidate=86400`.
 - `/api/flight-route/[icao24]` and `/api/flight-search` return `Cache-Control: public, max-age=43200, stale-while-revalidate=3600`.
 - AeroDataBox search and route calls use Tier 2 endpoints on the Basic plan. Keep them manual or cache-first.

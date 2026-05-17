@@ -5,7 +5,7 @@
 AeroScope is a Next.js App Router application. It requires a Node.js runtime for all API routes:
 
 - `/api/stream` uses Server-Sent Events and a process-local singleton.
-- AeroDataBox routes use server-side secrets and optional Upstash Redis.
+- AeroDataBox routes use server-side secrets and process-local memory caching.
 
 When deploying to Vercel, use the `rumble-ai` team by default unless another team is specified. If Vercel Functions regions are configured, prefer GDPR-friendly European regions: Paris (`cdg1`), Dublin (`dub1`), and Frankfurt (`fra1`).
 
@@ -17,8 +17,6 @@ When deploying to Vercel, use the `rumble-ai` team by default unless another tea
 | `OPENSKY_CLIENT_SECRET` | No | OpenSky OAuth2 API client secret |
 | `RAPIDAPI_KEY` | No | AeroDataBox RapidAPI key for metadata and route lookups |
 | `NEXT_PUBLIC_HAS_METADATA_KEY` | No | UI hint flag; set to `1` when `RAPIDAPI_KEY` is configured |
-| `UPSTASH_REDIS_REST_URL` | No | Optional shared AeroDataBox cache URL |
-| `UPSTASH_REDIS_REST_TOKEN` | No | Optional shared AeroDataBox cache token |
 
 Copy `.env.local.example` to `.env.local` for local development.
 
@@ -27,18 +25,17 @@ Copy `.env.local.example` to `.env.local` for local development.
 ### OpenSky
 
 - Cached in `lib/stream-hub.ts` for 5 minutes per Node.js process.
-- One union bounding box is fetched and fanned out to subscribers.
+- One global OpenSky snapshot is fetched and fanned out to subscribers after server-side viewport filtering.
 - If OpenSky returns `Too many requests`, the hub backs off for 15 minutes.
 - If cached data exists during backoff, stale positions continue to be served.
 
-Anonymous OpenSky access has a daily credit budget. With a 5-minute TTL, a continuous single-process session is roughly 288 upstream calls/day.
+Anonymous OpenSky access has a daily credit budget. With a 5-minute TTL, a continuous single-process session is roughly 288 upstream calls/day, with global `/states/all` requests charged at OpenSky's global request cost.
 
 ### AeroDataBox
 
 - Metadata is manual-loaded from the aircraft panel and cached in the browser for 30 days.
 - Route data is manual-loaded and cached in the browser for 12 hours.
-- Server memory cache stores metadata for 24 hours and routes/searches for 12 hours.
-- Optional Upstash Redis stores metadata for 30 days and routes/searches for 12 hours.
+- Server memory cache stores metadata for 24 hours and routes/searches for 12 hours per Node.js process.
 - Failed/rate-limited upstream responses are not cached as successful metadata.
 
 ## Observability
