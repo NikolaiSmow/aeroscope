@@ -1,66 +1,70 @@
 # AeroScope
 
-Live global aircraft intelligence — a Flightradar24-style web app built on free aviation APIs.
+AeroScope is a Next.js web app for live aircraft tracking and lightweight flight intelligence. It combines OpenSky live state vectors with optional AeroDataBox metadata and route lookups, while keeping free-tier API usage explicit and cache-first.
 
-## Stack
+## What It Provides
 
-- **Next.js 15 (App Router)** + TypeScript + Tailwind v4
-- **MapLibre GL** + **deck.gl** `IconLayer` for GPU-accelerated aircraft rendering
-- **Server-Sent Events** route handler with a singleton poll loop (one OpenSky request fan-out to all clients)
-- **Zustand** for UI state, **TanStack Query** for metadata caching
+- Live aircraft map with MapLibre, deck.gl, altitude-based aircraft colors, and bright/dark base-map switching.
+- Server-Sent Events stream that fans one cached OpenSky response out to all connected clients.
+- Manual AeroDataBox lookups for aircraft details, route endpoints, airport timing, and route progress.
+- Search by visible callsign/ICAO24, with a manual AeroDataBox fallback for flight callsigns or flight numbers.
 
-## Data sources
+## Tech Stack
 
-- **OpenSky Network** — live state vectors (`/api/states/all`, bbox-filtered). Anonymous = 10s resolution / 400 daily credits per IP. Auth = 5s / 4 000 credits.
-- **AeroDataBox** (RapidAPI) — manually-loaded aircraft metadata and flight route lookups. Basic plan is treated as scarce quota: 600 API units/month and 2 400 requests/month hard limits. Optional.
+- **Next.js 16 App Router** with React 19 and TypeScript
+- **Tailwind CSS v4** for UI styling
+- **MapLibre GL** and **deck.gl** for map rendering
+- **Zustand** for client UI state
+- **TanStack Query** for manual metadata/route query state
+- **OpenSky Network**, **AeroDataBox**, and optional **Upstash Redis**
 
-## Caching
-
-Live positions are cached server-side for 5 minutes in the singleton SSE loop. The stream fans one OpenSky response out to all clients, reuses cached data across reconnects/map moves, and backs off for 15 minutes if OpenSky rate-limits anonymous access. AeroDataBox calls are intentionally manual-only: selecting a plane does not spend RapidAPI quota. The details panel only calls AeroDataBox after clicking **Load details and route**.
-
-- **OpenSky live cache — in-memory singleton**, 5 min TTL, per-process. Keeps anonymous continuous use below the 400 credits/day budget.
-- **AeroDataBox browser cache — `localStorage`**, 30 d TTL, avoids repeat lookups from the same browser.
-- **AeroDataBox HTTP cache — route response**, 30 d TTL with 1 d stale-while-revalidate.
-- **AeroDataBox L1 — in-memory `Map`**, 24 h TTL, per-process. Hot path for repeated clicks on the same aircraft.
-- **AeroDataBox L2 — Upstash Redis** (optional, free tier), 30 d TTL, shared across instances and survives restarts. Configured via `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`. Falls back to L1/browser-only if not set.
-
-Negative results (AeroDataBox returns nothing for the ICAO24) are cached the same way to avoid burning quota on military/private aircraft repeatedly.
-
-Flight routes use AeroDataBox Flight Status by callsign/ICAO24 (Tier 2). They are cached for 12 h because flight status changes during the day.
-
-## Run locally
+## Local Development
 
 ```bash
-cp .env.local.example .env.local   # (optional) add OpenSky + RapidAPI keys
+cp .env.local.example .env.local
 npm install
 npm run dev
 ```
 
 Open <http://localhost:3000>.
 
-## Project layout
+Useful checks:
 
-```
-app/
-  page.tsx                   Map + UI shell (client-rendered map via next/dynamic)
-  api/stream/route.ts        SSE endpoint, subscribes to stream-hub
-  api/aircraft/[icao24]/     Metadata proxy → AeroDataBox (cached)
-components/
-  FlightMap.tsx              MapLibre + deck.gl IconLayer
-  FlightStream.tsx           EventSource client; updates the store
-  AircraftPanel.tsx          Side panel on selection
-  SearchBar.tsx              Callsign / ICAO24 lookup
-  StatusBar.tsx              Connection + count + last-update indicator
-lib/
-  opensky.ts                 Typed client + state-vector → Aircraft mapper
-  stream-hub.ts              Singleton poll loop, viewport-union, subscriber fan-out
-  aerodatabox.ts             Metadata client with in-memory TTL cache
-  store.ts                   Zustand store
+```bash
+npm run lint
+npm run build
 ```
 
-## Roadmap
+## Main Routes
 
-- PWA service worker + `next-pwa`
-- Bubblewrap TWA → Android Play Store wrap
-- Historical playback (paid OpenSky tier or self-hosted Postgres ingestion)
-- Airport overlays + scheduled-flight lookup
+| Route | Purpose |
+| --- | --- |
+| `/` | Map shell and aircraft tracking UI |
+| `/api/stream` | SSE feed for cached OpenSky aircraft states |
+| `/api/aircraft/[icao24]` | AeroDataBox aircraft metadata proxy |
+| `/api/flight-route/[icao24]` | AeroDataBox route lookup by ICAO24/callsign |
+| `/api/flight-search` | AeroDataBox route lookup by flight/callsign query |
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Integration/API](docs/integration.md)
+- [Operations](docs/operations.md)
+- [Changelog](docs/CHANGELOG.md)
+
+## Key Files
+
+| Path | Why it matters |
+| --- | --- |
+| `components/MapShell.tsx` | Top-level UI composition for map, search, status, and side panel |
+| `components/FlightMap.tsx` | MapLibre/deck.gl layers, route overlay, map styles, altitude legend |
+| `components/AircraftPanel.tsx` | Selected aircraft panel, manual AeroDataBox actions, route progress widget |
+| `components/SearchBar.tsx` | Local aircraft search and manual route-search fallback |
+| `lib/stream-hub.ts` | Singleton OpenSky polling, caching, fan-out, and rate-limit backoff |
+| `lib/opensky.ts` | OpenSky client and state-vector mapping |
+| `lib/aerodatabox.ts` | AeroDataBox clients, response mapping, and cache layers |
+| `lib/store.ts` | Shared client state for aircraft, selection, route, map bbox, and stream status |
+
+## Indexing
+
+The app is non-indexable by default via `robots` metadata in `app/layout.tsx`.
