@@ -111,7 +111,6 @@ function AltitudeLegend() {
     <div className="pointer-events-none absolute bottom-4 left-4 z-10 w-56 rounded-md border border-white/10 bg-zinc-950/75 px-3 py-2 text-[9px] text-zinc-300 shadow-2xl backdrop-blur">
       <div className="mb-1 flex items-center justify-between">
         <span className="font-semibold uppercase tracking-normal text-zinc-400">Altitude (ft)</span>
-        <span className="text-zinc-500">OpenSky</span>
       </div>
       <div className="h-2 rounded-sm bg-[linear-gradient(90deg,#f97316_0%,#f59e0b_10%,#eab308_22%,#84cc16_38%,#22c55e_50%,#0ea5e9_68%,#6366f1_84%,#d946ef_100%)]" />
       <div className="mt-1 flex justify-between text-zinc-400">
