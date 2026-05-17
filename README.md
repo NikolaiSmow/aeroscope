@@ -12,16 +12,21 @@ Live global flight tracking — a Flightradar24-style web app built on free avia
 ## Data sources
 
 - **OpenSky Network** — live state vectors (`/api/states/all`, bbox-filtered). Anonymous = 10s resolution / 400 daily credits per IP. Auth = 5s / 4 000 credits.
-- **AeroDataBox** (RapidAPI) — on-demand aircraft metadata (model, airline, image). Free trial 300–600 calls/month. Optional.
+- **AeroDataBox** (RapidAPI) — manually-loaded aircraft metadata and flight route lookups. Basic plan is treated as scarce quota: 600 API units/month and 2 400 requests/month hard limits. Optional.
 
 ## Caching
 
-Two layers of cache protect the AeroDataBox quota; live positions are not cached (always served fresh from the singleton SSE loop).
+Live positions are cached server-side for 5 minutes in the singleton SSE loop. The stream fans one OpenSky response out to all clients, reuses cached data across reconnects/map moves, and backs off for 15 minutes if OpenSky rate-limits anonymous access. AeroDataBox calls are intentionally manual-only: selecting a plane does not spend RapidAPI quota. The details panel only calls AeroDataBox after clicking **Load details and route**.
 
-- **L1 — in-memory `Map`**, 1 h TTL, per-process. Hot path for repeated clicks on the same aircraft.
-- **L2 — Upstash Redis** (optional, free tier), 24 h TTL, shared across instances and survives restarts. Configured via `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`. Falls back to L1-only if not set.
+- **OpenSky live cache — in-memory singleton**, 5 min TTL, per-process. Keeps anonymous continuous use below the 400 credits/day budget.
+- **AeroDataBox browser cache — `localStorage`**, 30 d TTL, avoids repeat lookups from the same browser.
+- **AeroDataBox HTTP cache — route response**, 30 d TTL with 1 d stale-while-revalidate.
+- **AeroDataBox L1 — in-memory `Map`**, 24 h TTL, per-process. Hot path for repeated clicks on the same aircraft.
+- **AeroDataBox L2 — Upstash Redis** (optional, free tier), 30 d TTL, shared across instances and survives restarts. Configured via `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`. Falls back to L1/browser-only if not set.
 
 Negative results (AeroDataBox returns nothing for the ICAO24) are cached the same way to avoid burning quota on military/private aircraft repeatedly.
+
+Flight routes use AeroDataBox Flight Status by callsign/ICAO24 (Tier 2). They are cached for 12 h because flight status changes during the day.
 
 ## Run locally
 
