@@ -33,7 +33,7 @@ export function MapShell() {
             </div>
             <SearchBar />
           </div>
-          <div className="pointer-events-auto">
+          <div className="pointer-events-auto mr-12">
             <StatusBar />
           </div>
         </header>
