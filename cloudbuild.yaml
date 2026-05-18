@@ -1,0 +1,29 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/aeroscope:$COMMIT_SHA"
+      - "."
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "gcr.io/$PROJECT_ID/aeroscope:$COMMIT_SHA"
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "aeroscope"
+      - "--image=gcr.io/$PROJECT_ID/aeroscope:$COMMIT_SHA"
+      - "--region=europe-west3"
+      - "--platform=managed"
+      - "--allow-unauthenticated"
+      - "--memory=512Mi"
+      - "--cpu=1"
+      - "--concurrency=80"
+      - "--min-instances=0"
+      - "--max-instances=1"
+      - "--timeout=30s"
+images:
+  - "gcr.io/$PROJECT_ID/aeroscope:$COMMIT_SHA"
