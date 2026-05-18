@@ -24,8 +24,10 @@ function parseBBox(req: Request): BBox | null {
 
 export async function GET(req: Request) {
   const bbox = parseBBox(req);
+  const url = new URL(req.url);
+  const anonymous = process.env.AEROSCOPE_DEBUG_API === "1" && url.searchParams.get("anonymous") === "1";
   try {
-    return Response.json(await streamHub.snapshot(bbox), {
+    return Response.json(await streamHub.snapshot(bbox, { anonymous }), {
       headers: {
         "Cache-Control": "no-store",
       },

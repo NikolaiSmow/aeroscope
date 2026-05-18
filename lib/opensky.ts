@@ -149,7 +149,11 @@ async function authHeader(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export async function fetchStates(bbox?: BBox, signal?: AbortSignal): Promise<{ time: number; aircraft: Aircraft[] }> {
+export async function fetchStates(
+  bbox?: BBox,
+  signal?: AbortSignal,
+  options: { anonymous?: boolean } = {},
+): Promise<{ time: number; aircraft: Aircraft[] }> {
   const url = new URL(ENDPOINT);
   if (bbox) {
     url.searchParams.set("lamin", String(bbox.lamin));
@@ -158,7 +162,7 @@ export async function fetchStates(bbox?: BBox, signal?: AbortSignal): Promise<{ 
     url.searchParams.set("lomax", String(bbox.lomax));
   }
   const res = await httpsText(url, {
-    headers: { Accept: "application/json", ...(await authHeader()) },
+    headers: { Accept: "application/json", ...(options.anonymous ? {} : await authHeader()) },
     signal,
   });
   if (res.status < 200 || res.status >= 300) {

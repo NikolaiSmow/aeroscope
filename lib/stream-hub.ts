@@ -23,8 +23,8 @@ class StreamHub {
   private inFlight: Promise<void> | null = null;
   private fetchPromise: Promise<{ time: number; aircraft: Aircraft[] }> | null = null;
 
-  async snapshot(bbox: BBox | null): Promise<Snapshot> {
-    const payload = await this.ensurePayload();
+  async snapshot(bbox: BBox | null, options: { anonymous?: boolean } = {}): Promise<Snapshot> {
+    const payload = await this.ensurePayload(options);
     return {
       time: payload.time,
       aircraft: bbox ? filterToBBox(payload.aircraft, bbox) : payload.aircraft,
@@ -88,7 +88,9 @@ class StreamHub {
     return this.inFlight;
   }
 
-  private async ensurePayload(): Promise<{ time: number; aircraft: Aircraft[] }> {
+  private async ensurePayload(options: { anonymous?: boolean } = {}): Promise<{ time: number; aircraft: Aircraft[] }> {
+    if (options.anonymous) return fetchStates(undefined, undefined, { anonymous: true });
+
     const now = Date.now();
     if (this.lastPayload && now - this.lastFetchAt < LIVE_CACHE_TTL_MS) return this.lastPayload;
     if (this.lastPayload && now - this.lastRateLimitAt < RATE_LIMIT_BACKOFF_MS) return this.lastPayload;
