@@ -113,8 +113,9 @@ export function SearchBar() {
     <div className="relative w-80">
       <form onSubmit={onSubmit} className="relative">
         <Search
-          size={16}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+          size={15}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+          style={{ color: "var(--text-tertiary)" }}
         />
         <input
           value={q}
@@ -124,29 +125,37 @@ export function SearchBar() {
             setMessage(null);
           }}
           placeholder="Flight, callsign, or ICAO24..."
-          className="w-full rounded-lg border border-white/10 bg-zinc-950/80 py-2 pl-9 pr-9 text-sm text-zinc-100 backdrop-blur placeholder:text-zinc-500 focus:border-orange-300/70 focus:outline-none"
+          className="overlay-surface w-full rounded-xl py-2 pl-9 pr-9 text-sm transition-[border-color] duration-200 focus:outline-none"
+          style={{
+            color: "var(--text-primary)",
+            borderColor: undefined,
+          }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = ""; }}
         />
         {status === "searching" && (
           <Loader2
-            size={16}
-            className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-zinc-400"
+            size={15}
+            className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin"
+            style={{ color: "var(--text-tertiary)" }}
           />
         )}
       </form>
 
       {trimmed && suggestions.length > 0 && status !== "searching" && (
-        <div className="absolute left-0 top-11 z-30 w-full overflow-hidden rounded-lg border border-white/10 bg-zinc-950/95 shadow-2xl backdrop-blur">
+        <div className="overlay-surface absolute left-0 top-11 z-30 w-full overflow-hidden rounded-xl shadow-2xl">
           {suggestions.map((item) => (
             <button
               key={item.icao24}
               type="button"
               onClick={() => choose(item)}
-              className="flex w-full items-center gap-3 border-b border-white/5 px-3 py-2 text-left transition last:border-b-0 hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors duration-150 last:border-b-0 hover:bg-white/[0.06]"
+              style={{ borderBottom: "1px solid var(--border-subtle)" }}
             >
-              <Plane size={15} className="shrink-0 text-orange-300" />
+              <Plane size={14} className="shrink-0" style={{ color: "var(--accent)" }} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-zinc-100">{aircraftLabel(item)}</span>
-                <span className="block truncate text-xs text-zinc-500">
+                <span className="block truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>{aircraftLabel(item)}</span>
+                <span className="block truncate text-xs" style={{ color: "var(--text-tertiary)" }}>
                   {item.icao24.toUpperCase()} · {item.originCountry}
                 </span>
               </span>
@@ -156,10 +165,10 @@ export function SearchBar() {
       )}
 
       {message && (
-        <div className="absolute left-0 top-11 z-30 w-full rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs leading-relaxed text-zinc-300 shadow-2xl backdrop-blur">
+        <div className="overlay-surface absolute left-0 top-11 z-30 w-full rounded-xl px-3 py-2.5 text-xs leading-relaxed shadow-2xl" style={{ color: "var(--text-secondary)" }}>
           {message}
           {status === "route-only" && (
-            <div className="mt-1 text-zinc-500">Move or zoom the map to the route area, then search again.</div>
+            <div className="mt-1" style={{ color: "var(--text-tertiary)" }}>Move or zoom the map to the route area, then search again.</div>
           )}
         </div>
       )}
