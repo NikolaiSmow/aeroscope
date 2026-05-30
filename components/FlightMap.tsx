@@ -20,11 +20,11 @@ const MAP_STYLES = {
 } as const;
 type MapStyleKey = keyof typeof MAP_STYLES;
 const ALTITUDE_CATEGORIES = [
-  { label: "Ground", maxFeet: 0, color: [148, 163, 184, 220], hex: "#94a3b8" },
-  { label: "0-10k", maxFeet: 10_000, color: [217, 119, 6, 230], hex: "#d97706" },
-  { label: "10-20k", maxFeet: 20_000, color: [101, 163, 13, 230], hex: "#65a30d" },
-  { label: "20-30k", maxFeet: 30_000, color: [8, 145, 178, 230], hex: "#0891b2" },
-  { label: "30k+", maxFeet: Infinity, color: [79, 70, 229, 230], hex: "#4f46e5" },
+  { label: "GND", maxFeet: 0, color: [148, 163, 184, 220], hex: "oklch(0.65 0.02 250)" },
+  { label: "0-10k", maxFeet: 10_000, color: [217, 119, 6, 230], hex: "oklch(0.65 0.17 65)" },
+  { label: "10-20k", maxFeet: 20_000, color: [101, 163, 13, 230], hex: "oklch(0.65 0.19 135)" },
+  { label: "20-30k", maxFeet: 30_000, color: [8, 145, 178, 230], hex: "oklch(0.62 0.14 210)" },
+  { label: "30k+", maxFeet: Infinity, color: [79, 70, 229, 230], hex: "oklch(0.50 0.22 275)" },
 ] satisfies {
   label: string;
   maxFeet: number;
@@ -100,22 +100,52 @@ function altitudeColor(aircraft: Aircraft): [number, number, number, number] {
   );
 }
 
+function thinByZoom(
+  aircraft: Aircraft[],
+  zoom: number,
+  selectedIcao24: string | null,
+): Aircraft[] {
+  if (zoom >= 7) return aircraft;
+
+  const cellSize = 1.5 / 2 ** (zoom - 3);
+  const grid = new Map<string, Aircraft>();
+
+  for (const a of aircraft) {
+    if (a.icao24 === selectedIcao24) continue;
+    const key = `${Math.floor(a.longitude / cellSize)},${Math.floor(a.latitude / cellSize)}`;
+    const existing = grid.get(key);
+    if (!existing || (a.geoAltitude ?? 0) > (existing.geoAltitude ?? 0)) {
+      grid.set(key, a);
+    }
+  }
+
+  const result = Array.from(grid.values());
+  if (selectedIcao24) {
+    const sel = aircraft.find((a) => a.icao24 === selectedIcao24);
+    if (sel) result.push(sel);
+  }
+  return result;
+}
+
 function AltitudeLegend() {
   return (
-    <div className="pointer-events-none absolute bottom-4 left-4 z-10 w-56 rounded-md border border-white/10 bg-zinc-950/75 px-3 py-2 text-[9px] text-zinc-300 shadow-2xl backdrop-blur">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="font-semibold uppercase tracking-normal text-zinc-400">Altitude (ft)</span>
+    <div
+      className="overlay-surface pointer-events-none absolute bottom-3 left-3 z-10 rounded-xl px-3 py-2.5"
+    >
+      <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
+        Altitude (ft)
       </div>
-      <div className="grid grid-cols-5 gap-1">
+      <div className="flex gap-1">
         {ALTITUDE_CATEGORIES.map((category) => (
-          <div key={category.label} className="h-2 rounded-sm" style={{ backgroundColor: category.hex }} />
-        ))}
-      </div>
-      <div className="mt-1 grid grid-cols-5 gap-1 text-center text-zinc-400">
-        {ALTITUDE_CATEGORIES.map((category) => (
-          <span key={category.label} className="truncate">
-            {category.label}
-          </span>
+          <div key={category.label} className="flex flex-col items-center gap-1">
+            <div
+              className="h-2 w-8 rounded-sm"
+              style={{ backgroundColor: category.hex }}
+            />
+            <span className="text-[9px] tabular-nums" style={{ color: "var(--text-tertiary)" }}>
+              {category.label}
+            </span>
+          </div>
         ))}
       </div>
     </div>
@@ -130,17 +160,18 @@ function MapStyleControl({
   onChange: (value: MapStyleKey) => void;
 }) {
   return (
-    <div className="pointer-events-auto absolute bottom-20 left-4 z-20 flex overflow-hidden rounded-md border border-white/15 bg-zinc-950/75 p-0.5 text-xs shadow-2xl backdrop-blur">
+    <div className="overlay-surface pointer-events-auto absolute bottom-[4.5rem] left-3 z-20 flex rounded-xl p-0.5 text-xs">
       {(Object.keys(MAP_STYLES) as MapStyleKey[]).map((key) => (
         <button
           key={key}
           type="button"
           onClick={() => onChange(key)}
-          className={`rounded px-3 py-1.5 font-medium transition ${
+          className="rounded-[10px] px-3 py-1.5 font-medium transition-all duration-200"
+          style={
             value === key
-              ? "bg-white text-zinc-950"
-              : "text-zinc-300 hover:bg-white/10 hover:text-white"
-          }`}
+              ? { background: "var(--accent)", color: "var(--background)" }
+              : { color: "var(--text-secondary)" }
+          }
         >
           {MAP_STYLES[key].label}
         </button>
@@ -154,6 +185,8 @@ export function FlightMap() {
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [mapStyle, setMapStyle] = useState<MapStyleKey>("bright");
+  const [zoom, setZoom] = useState(4);
+  const [hoveredIcao24, setHoveredIcao24] = useState<string | null>(null);
   const iconUrl = useMemo(() => {
     if (typeof document === "undefined") return null;
     return buildPlaneIconDataUrl();
@@ -190,6 +223,7 @@ export function FlightMap() {
         lamax: b.getNorth(),
         lomax: b.getEast(),
       });
+      setZoom(map.getZoom());
     };
     map.on("load", publishBBox);
     map.on("moveend", publishBBox);
@@ -206,6 +240,11 @@ export function FlightMap() {
     if (!map) return;
     map.setStyle(MAP_STYLES[mapStyle].url);
   }, [mapStyle]);
+
+  const visibleAircraft = useMemo(
+    () => thinByZoom(aircraft, zoom, selectedIcao24),
+    [aircraft, zoom, selectedIcao24],
+  );
 
   const layers = useMemo(() => {
     if (!iconUrl) return [];
@@ -249,7 +288,7 @@ export function FlightMap() {
       ...routeLayers,
       new IconLayer<Aircraft>({
         id: "aircraft-border",
-        data: aircraft,
+        data: visibleAircraft,
         pickable: false,
         iconAtlas: iconUrl,
         iconMapping: {
@@ -257,17 +296,21 @@ export function FlightMap() {
         },
         getIcon: () => "plane",
         sizeUnits: "pixels",
-        getSize: (d) => (d.icao24 === selectedIcao24 ? 38 : 22),
+        getSize: (d) => {
+          if (d.icao24 === selectedIcao24) return 38;
+          if (d.icao24 === hoveredIcao24) return 32;
+          return 22;
+        },
         getPosition: (d) => [d.longitude, d.latitude],
         getAngle: (d) => -(d.trueTrack ?? 0),
         getColor: [5, 5, 7, 230],
         updateTriggers: {
-          getSize: selectedIcao24,
+          getSize: [selectedIcao24, hoveredIcao24],
         },
       }),
       new IconLayer<Aircraft>({
         id: "aircraft",
-        data: aircraft,
+        data: visibleAircraft,
         pickable: true,
         iconAtlas: iconUrl,
         iconMapping: {
@@ -275,20 +318,35 @@ export function FlightMap() {
         },
         getIcon: () => "plane",
         sizeUnits: "pixels",
-        getSize: (d) => (d.icao24 === selectedIcao24 ? 32 : 18),
+        getSize: (d) => {
+          if (d.icao24 === selectedIcao24) return 32;
+          if (d.icao24 === hoveredIcao24) return 26;
+          return 18;
+        },
         getPosition: (d) => [d.longitude, d.latitude],
         getAngle: (d) => -(d.trueTrack ?? 0),
-        getColor: altitudeColor,
+        getColor: (d) => {
+          if (d.icao24 === hoveredIcao24) return [255, 255, 255, 255];
+          return altitudeColor(d);
+        },
         updateTriggers: {
-          getSize: selectedIcao24,
+          getSize: [selectedIcao24, hoveredIcao24],
+          getColor: hoveredIcao24,
         },
         onClick: (info) => {
           const d = info.object as Aircraft | undefined;
           if (d) select(d.icao24);
         },
+        onHover: (info) => {
+          const canvas = containerRef.current?.querySelector("canvas");
+          if (!canvas) return;
+          const obj = info.object as Aircraft | undefined;
+          canvas.classList.toggle("pointer-cursor", Boolean(obj));
+          setHoveredIcao24(obj?.icao24 ?? null);
+        },
       }),
     ];
-  }, [aircraft, selectedIcao24, selectedRoute, iconUrl, select]);
+  }, [visibleAircraft, aircraft, selectedIcao24, hoveredIcao24, selectedRoute, iconUrl, select]);
 
   useEffect(() => {
     overlayRef.current?.setProps({ layers });
