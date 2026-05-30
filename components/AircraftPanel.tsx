@@ -70,29 +70,19 @@ async function fetchRoute(aircraft: Aircraft): Promise<FlightRoute | null> {
   return data;
 }
 
-function Row({ label, value }: { label: string; value: string | number | null | undefined }) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div className="flex justify-between gap-4 py-1.5 border-b border-white/5 text-sm">
-      <span className="text-zinc-400">{label}</span>
-      <span className="font-medium text-zinc-100 text-right">{value}</span>
-    </div>
-  );
+/* ── Formatting helpers ── */
+
+function metersToFeet(m: number | null): number | null {
+  return m === null ? null : Math.round(m * 3.28084);
 }
 
-function metersToFeet(m: number | null): string | null {
-  if (m === null) return null;
-  return `${Math.round(m * 3.28084).toLocaleString()} ft`;
+function mpsToKnots(v: number | null): number | null {
+  return v === null ? null : Math.round(v * 1.94384);
 }
 
-function mpsToKnots(v: number | null): string | null {
-  if (v === null) return null;
-  return `${Math.round(v * 1.94384).toLocaleString()} kts`;
-}
-
-function formatHeading(deg: number | null): string | null {
-  if (deg === null) return null;
-  return `${Math.round(deg)}°`;
+function verticalRateFpm(v: number | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  return Math.round(v * 196.85);
 }
 
 function formatUtcTime(value: string | null): string | null {
@@ -167,6 +157,45 @@ function airportName(airport: FlightRoute["departure"]): string {
   return airport.municipalityName ?? airport.name;
 }
 
+/* ── Sub-components ── */
+
+function Metric({ label, value, unit, span }: { label: string; value: string | number | null; unit?: string; span?: boolean }) {
+  if (value === null) return null;
+  return (
+    <div className={span ? "col-span-2" : ""}>
+      <div className="text-[10px] font-medium uppercase tracking-[0.06em]" style={{ color: "var(--text-tertiary)" }}>
+        {label}
+      </div>
+      <div className="mt-0.5 flex items-baseline gap-1">
+        <span className="text-lg font-semibold tabular-nums leading-tight" style={{ color: "var(--text-primary)" }}>
+          {typeof value === "number" ? value.toLocaleString() : value}
+        </span>
+        {unit && (
+          <span className="text-[11px] font-medium" style={{ color: "var(--text-tertiary)" }}>{unit}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string | number | null | undefined }) {
+  if (value === null || value === undefined || value === "") return null;
+  return (
+    <div className="flex justify-between gap-4 py-1.5 text-[13px]" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+      <span style={{ color: "var(--text-tertiary)" }}>{label}</span>
+      <span className="font-medium text-right" style={{ color: "var(--text-primary)" }}>{value}</span>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-2 mt-6 text-[10px] font-semibold uppercase tracking-[0.08em] first:mt-0" style={{ color: "var(--text-tertiary)" }}>
+      {children}
+    </div>
+  );
+}
+
 function RouteProgressWidget({
   route,
   progress,
@@ -179,40 +208,52 @@ function RouteProgressWidget({
   const markerPosition = Math.max(12, Math.min(88, progress));
 
   return (
-    <div className="mt-3 rounded-lg border border-white/10 bg-zinc-100 p-3 text-zinc-900 shadow-lg">
+    <div className="rounded-xl p-3.5" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
       <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
         <div className="min-w-0">
-          <div className="truncate text-3xl font-semibold leading-none tracking-normal">{airportCode(route.departure)}</div>
-          <div className="mt-1 truncate text-xs font-semibold uppercase tracking-normal text-zinc-600">
+          <div className="truncate text-2xl font-semibold leading-none tracking-tight" style={{ color: "var(--text-primary)" }}>{airportCode(route.departure)}</div>
+          <div className="mt-1.5 truncate text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>
             {airportName(route.departure)}
           </div>
         </div>
-        <div className="mt-1 flex h-11 w-11 items-center justify-center rounded-full bg-white text-yellow-400 shadow-sm">
-          <Plane size={26} fill="currentColor" strokeWidth={0} />
+        <div
+          className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full"
+          style={{ background: "var(--accent-dim)", color: "var(--accent)" }}
+        >
+          <Plane size={18} fill="currentColor" strokeWidth={0} />
         </div>
         <div className="min-w-0 text-right">
-          <div className="truncate text-3xl font-semibold leading-none tracking-normal">{airportCode(route.arrival)}</div>
-          <div className="mt-1 truncate text-xs font-semibold uppercase tracking-normal text-zinc-600">
+          <div className="truncate text-2xl font-semibold leading-none tracking-tight" style={{ color: "var(--text-primary)" }}>{airportCode(route.arrival)}</div>
+          <div className="mt-1.5 truncate text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>
             {airportName(route.arrival)}
           </div>
         </div>
       </div>
 
-      <div className="relative mt-4 h-2 rounded-full bg-zinc-300">
-        <div className="h-full rounded-full bg-yellow-400" style={{ width: `${progress}%` }} />
+      <div className="relative mt-4 h-1.5 rounded-full" style={{ background: "var(--border)" }}>
         <div
-          className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-yellow-400 shadow"
-          style={{ left: `${markerPosition}%` }}
+          className="h-full rounded-full transition-[width] duration-700"
+          style={{ width: `${progress}%`, background: "var(--accent)" }}
+        />
+        <div
+          className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full transition-[left] duration-700"
+          style={{
+            left: `${markerPosition}%`,
+            background: "var(--accent)",
+            boxShadow: `0 0 8px var(--accent), 0 0 2px var(--accent)`,
+          }}
         />
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-3 text-sm font-semibold text-zinc-600">
-        <span className="min-w-0 truncate">{routeTimeLabel("Departed", departureTime) ?? "Departure time unknown"}</span>
-        <span className="min-w-0 truncate text-right">{routeTimeLabel("Lands", arrivalTime) ?? route.status ?? "Arrival time unknown"}</span>
+      <div className="mt-3 flex items-center justify-between gap-3 text-[11px] font-medium" style={{ color: "var(--text-tertiary)" }}>
+        <span className="min-w-0 truncate">{routeTimeLabel("Departed", departureTime) ?? "Departure unknown"}</span>
+        <span className="min-w-0 truncate text-right">{routeTimeLabel("Lands", arrivalTime) ?? route.status ?? "Arrival unknown"}</span>
       </div>
     </div>
   );
 }
+
+/* ── Main panel ── */
 
 export function AircraftPanel() {
   const selectedIcao24 = useFlightStore((s) => s.selectedIcao24);
@@ -274,136 +315,162 @@ export function AircraftPanel() {
 
   if (!selectedIcao24) return null;
 
+  const alt = metersToFeet(selected?.geoAltitude ?? selected?.baroAltitude ?? null);
+  const spd = mpsToKnots(selected?.velocity ?? null);
+  const hdg = selected?.trueTrack !== null && selected?.trueTrack !== undefined ? Math.round(selected.trueTrack) : null;
+  const vsi = verticalRateFpm(selected?.verticalRate);
+
   return (
-    <aside className="absolute right-0 top-0 z-10 h-full w-full max-w-sm overflow-y-auto border-l border-white/10 bg-zinc-950/95 backdrop-blur p-5 shadow-2xl">
+    <aside
+      className="panel-enter absolute right-0 top-0 z-10 h-full w-full max-w-sm overflow-y-auto p-5 shadow-2xl"
+      style={{
+        background: "oklch(0.10 0.008 250 / 0.92)",
+        backdropFilter: "blur(20px) saturate(1.3)",
+        WebkitBackdropFilter: "blur(20px) saturate(1.3)",
+        borderLeft: "1px solid var(--border)",
+      }}
+    >
+      {/* ── Header ── */}
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="text-xs uppercase tracking-wider text-zinc-500">Aircraft</div>
-          <h2 className="text-2xl font-semibold text-white">
+        <div className="min-w-0">
+          <h2 className="truncate text-xl font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
             {selected?.callsign || meta?.registration || selectedIcao24.toUpperCase()}
           </h2>
-          {meta?.airline && <div className="text-sm text-zinc-400 mt-0.5">{meta.airline}</div>}
+          <div className="mt-0.5 flex items-center gap-2 text-sm">
+            {meta?.airline && <span style={{ color: "var(--text-secondary)" }}>{meta.airline}</span>}
+            {meta?.model && (
+              <>
+                {meta?.airline && <span style={{ color: "var(--border)" }}>·</span>}
+                <span style={{ color: "var(--text-tertiary)" }}>{meta.model}</span>
+              </>
+            )}
+            {!meta?.airline && !meta?.model && selected?.originCountry && (
+              <span style={{ color: "var(--text-tertiary)" }}>{selected.originCountry}</span>
+            )}
+          </div>
         </div>
         <button
           onClick={() => select(null)}
-          className="text-zinc-400 hover:text-white transition rounded p-1 hover:bg-white/5"
+          className="shrink-0 rounded-lg p-1.5 transition-colors duration-150 hover:bg-white/[0.06]"
+          style={{ color: "var(--text-tertiary)" }}
           aria-label="Close"
         >
-          <X size={18} />
+          <X size={16} />
         </button>
       </div>
 
+      {/* ── Aircraft image ── */}
       {meta?.imageUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={meta.imageUrl}
           alt={meta.model ?? "Aircraft"}
-          className="mt-4 w-full rounded-lg border border-white/10"
+          className="mt-4 w-full rounded-xl object-cover"
+          style={{ border: "1px solid var(--border)", maxHeight: 160 }}
         />
       )}
 
+      {/* ── Load data CTA ── */}
       {hasMetadataKey && (needsMetadata || needsRoute) && (
-        <div className="mt-5 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <button
-            type="button"
-            onClick={() => void loadAeroData()}
-            disabled={isLoadingAeroData || !selected}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/15 disabled:cursor-wait disabled:opacity-60"
-          >
-            <Database size={15} />
-            {isLoadingAeroData
-              ? "Loading AeroDataBox data..."
-              : isFetched || isRouteFetched
-                ? "Load missing AeroDataBox data"
-                : "Load details and route"}
-          </button>
-          <div className="mt-2 text-xs leading-relaxed text-zinc-500">
-            Cache is checked first. Uncached route lookups use a Tier 2 request, so this stays manual for the Basic plan.
-          </div>
+        <button
+          type="button"
+          onClick={() => void loadAeroData()}
+          disabled={isLoadingAeroData || !selected}
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors duration-150 disabled:cursor-wait disabled:opacity-50"
+          style={{
+            background: "var(--accent-dim)",
+            color: "var(--accent)",
+            border: "1px solid oklch(0.75 0.12 195 / 0.2)",
+          }}
+        >
+          <Database size={14} />
+          {isLoadingAeroData
+            ? "Loading..."
+            : isFetched || isRouteFetched
+              ? "Load missing data"
+              : "Load details and route"}
+        </button>
+      )}
+
+      {/* ── Telemetry ── */}
+      <SectionLabel>Live telemetry</SectionLabel>
+      <div
+        className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl p-3.5"
+        style={{ background: "var(--surface)", border: "1px solid var(--border-subtle)" }}
+      >
+        <Metric label="Altitude" value={alt} unit="ft" />
+        <Metric label="Speed" value={spd} unit="kts" />
+        <Metric label="Heading" value={hdg !== null ? `${hdg}°` : null} />
+        <Metric
+          label="Vertical rate"
+          value={vsi}
+          unit="ft/min"
+        />
+        <Metric label="Squawk" value={selected?.squawk ?? null} />
+        <Metric label="On ground" value={selected?.onGround ? "Yes" : "No"} />
+      </div>
+      {selected && (
+        <div className="mt-2 text-right text-[11px] font-mono tabular-nums" style={{ color: "var(--text-tertiary)" }}>
+          {selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}
         </div>
       )}
 
-      <section className="mt-6">
-        <h3 className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Live position</h3>
-        <Row label="Altitude" value={metersToFeet(selected?.geoAltitude ?? selected?.baroAltitude ?? null)} />
-        <Row label="Speed" value={mpsToKnots(selected?.velocity ?? null)} />
-        <Row label="Heading" value={formatHeading(selected?.trueTrack ?? null)} />
-        <Row
-          label="Vertical rate"
-          value={selected?.verticalRate !== null && selected?.verticalRate !== undefined ? `${Math.round((selected.verticalRate ?? 0) * 196.85).toLocaleString()} ft/min` : null}
-        />
-        <Row label="On ground" value={selected?.onGround ? "Yes" : "No"} />
-        <Row label="Squawk" value={selected?.squawk ?? null} />
-        <Row
-          label="Position"
-          value={selected ? `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}` : null}
-        />
-      </section>
+      {/* ── Route ── */}
+      {(route || isRouteFetching || (hasMetadataKey && isRouteFetched)) && (
+        <>
+          <SectionLabel>Route</SectionLabel>
+          {route && progress !== null && <RouteProgressWidget route={route} progress={progress} />}
+          {route && (
+            <div className="mt-2.5 space-y-0">
+              <Row label="Flight" value={route.number ?? route.callSign ?? null} />
+              <Row label="Status" value={route.status ?? null} />
+              <Row label="Distance" value={formatDistance(route.distanceNm, route.distanceKm)} />
+              <Row label="Depart" value={formatUtcTime(route.departureRevisedUtc ?? route.departureScheduledUtc ?? null)} />
+              <Row label="Arrive" value={formatUtcTime(route.arrivalRevisedUtc ?? route.arrivalScheduledUtc ?? null)} />
+              <Row label="Terminals" value={route.departureTerminal || route.arrivalTerminal ? `${route.departureTerminal ?? "?"} → ${route.arrivalTerminal ?? "?"}` : null} />
+            </div>
+          )}
+          {isRouteFetching && <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>Loading route...</div>}
+          {hasMetadataKey && !isRouteFetching && isRouteError && (
+            <div className="mt-2 text-xs" style={{ color: "oklch(0.78 0.14 85)" }}>
+              {routeErrorMessage?.includes("429") ? "Rate limited. Wait before retrying." : "No route data for this flight."}
+            </div>
+          )}
+          {hasMetadataKey && isRouteFetched && !isRouteFetching && !isRouteError && !route && (
+            <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>No route found.</div>
+          )}
+        </>
+      )}
 
-      <section className="mt-6">
-        <h3 className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Route</h3>
-        {route && progress !== null && <RouteProgressWidget route={route} progress={progress} />}
-        <Row label="Flight" value={route?.number ?? route?.callSign ?? null} />
-        <Row
-          label="From"
-          value={
-            route
-              ? `${route.departure.iata ?? route.departure.icao ?? route.departure.name} · ${route.departure.municipalityName ?? route.departure.name}`
-              : null
-          }
-        />
-        <Row
-          label="To"
-          value={
-            route
-              ? `${route.arrival.iata ?? route.arrival.icao ?? route.arrival.name} · ${route.arrival.municipalityName ?? route.arrival.name}`
-              : null
-          }
-        />
-        <Row label="Status" value={route?.status ?? null} />
-        <Row label="Distance" value={route ? formatDistance(route.distanceNm, route.distanceKm) : null} />
-        <Row label="Depart" value={formatUtcTime(route?.departureRevisedUtc ?? route?.departureScheduledUtc ?? null)} />
-        <Row label="Arrive" value={formatUtcTime(route?.arrivalRevisedUtc ?? route?.arrivalScheduledUtc ?? null)} />
-        <Row label="Terminals" value={route?.departureTerminal || route?.arrivalTerminal ? `${route.departureTerminal ?? "?"} -> ${route.arrivalTerminal ?? "?"}` : null} />
-        {isRouteFetching && <div className="text-xs text-zinc-500 mt-2">Loading route...</div>}
-        {hasMetadataKey && !isRouteFetching && isRouteError && (
-          <div className="text-xs text-amber-300 mt-2">
-            {routeErrorMessage?.includes("429")
-              ? "AeroDataBox rate-limited this route lookup. Wait before retrying to preserve the free-plan quota."
-              : "AeroDataBox did not return route data for this flight."}
-          </div>
-        )}
-        {hasMetadataKey && isRouteFetched && !isRouteFetching && !isRouteError && !route && (
-          <div className="text-xs text-zinc-500 mt-2">No route found for this aircraft.</div>
-        )}
-      </section>
-
-      <section className="mt-6">
-        <h3 className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Aircraft details</h3>
+      {/* ── Aircraft details ── */}
+      <SectionLabel>Aircraft</SectionLabel>
+      <div className="space-y-0">
         <Row label="ICAO24" value={selectedIcao24.toUpperCase()} />
-        <Row label="Origin country" value={selected?.originCountry ?? null} />
+        <Row label="Origin" value={selected?.originCountry ?? null} />
         <Row label="Registration" value={meta?.registration ?? null} />
-        <Row label="Model" value={meta?.model ?? null} />
+        <Row label="Type" value={meta?.model ?? null} />
         <Row label="Manufacturer" value={meta?.productionLine ?? meta?.manufacturer ?? null} />
-        {isFetching && <div className="text-xs text-zinc-500 mt-2">Loading metadata...</div>}
-        {hasMetadataKey && !isFetching && isError && (
-          <div className="text-xs text-amber-300 mt-2">
-            {errorMessage?.includes("not subscribed")
-              ? "RapidAPI says this key is not subscribed to AeroDataBox. Open the AeroDataBox page in RapidAPI and subscribe to the Basic plan."
-              : errorMessage?.includes("429")
-                ? "AeroDataBox rate-limited this lookup. Wait before retrying to preserve the free-plan quota."
-                : "AeroDataBox did not return details. Try again later to preserve the free-plan quota."}
-          </div>
-        )}
-        {hasMetadataKey && isFetched && !isFetching && !isError && !meta?.model && !meta?.registration && (
-          <div className="text-xs text-zinc-500 mt-2">No extended metadata available for this aircraft.</div>
-        )}
-        {!hasMetadataKey && (
-          <div className="text-xs text-zinc-500 mt-2">
-            Set RAPIDAPI_KEY (AeroDataBox) in .env.local to enable extended metadata.
-          </div>
-        )}
-      </section>
+      </div>
+      {isFetching && <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>Loading metadata...</div>}
+      {hasMetadataKey && !isFetching && isError && (
+        <div className="mt-2 text-xs" style={{ color: "oklch(0.78 0.14 85)" }}>
+          {errorMessage?.includes("not subscribed")
+            ? "API key not subscribed. Subscribe on RapidAPI."
+            : errorMessage?.includes("429")
+              ? "Rate limited. Wait before retrying."
+              : "No details returned."}
+        </div>
+      )}
+      {hasMetadataKey && isFetched && !isFetching && !isError && !meta?.model && !meta?.registration && (
+        <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>No extended metadata available.</div>
+      )}
+      {!hasMetadataKey && (
+        <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+          Set RAPIDAPI_KEY in .env.local for extended metadata.
+        </div>
+      )}
+
+      <div className="h-6" />
     </aside>
   );
 }
