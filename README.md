@@ -50,6 +50,7 @@ npm run build
 - [Architecture](docs/architecture.md)
 - [Integration/API](docs/integration.md)
 - [Operations](docs/operations.md)
+- [GitHub Pages](docs/github-pages.md)
 - [Open Issues](docs/open-issues.md)
 - [Changelog](docs/CHANGELOG.md)
 

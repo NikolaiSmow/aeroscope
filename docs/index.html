@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="AeroScope documentation for setup, architecture, API routes, deployment, and maintenance."
+    />
+    <title>AeroScope Docs</title>
+    <link rel="icon" href="./aeroscope-mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <aside class="sidebar" aria-label="Documentation navigation">
+        <a class="brand" href="#overview" aria-label="AeroScope documentation home">
+          <img src="./aeroscope-mark.svg" alt="" />
+          <span>
+            <strong>AeroScope</strong>
+            <small>Operations docs</small>
+          </span>
+        </a>
+
+        <nav class="section-nav">
+          <a href="#overview" class="active">Overview</a>
+          <a href="#setup">Setup</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="#api-calls">API Calls</a>
+          <a href="#deployment">Deployment</a>
+          <a href="#maintenance">Maintenance</a>
+        </nav>
+
+        <div class="sidebar-note">
+          <span class="status-dot"></span>
+          <p>
+            GitHub Pages hosts this documentation as static files. The live app
+            still needs a Node.js runtime for its API routes.
+          </p>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section class="hero-section docs-section" id="overview">
+          <div>
+            <p class="label">AeroScope Documentation</p>
+            <h1>Live aircraft tracking, explained for builders.</h1>
+            <p class="lede">
+              AeroScope is a Next.js application for live aircraft positions,
+              route enrichment, and lightweight flight intelligence. This page
+              collects the repository essentials in one publishable GitHub Pages
+              reference.
+            </p>
+          </div>
+
+          <div class="facts-panel" aria-label="Repository facts">
+            <div>
+              <span>Runtime</span>
+              <strong>Next.js App Router</strong>
+            </div>
+            <div>
+              <span>Map stack</span>
+              <strong>MapLibre + deck.gl</strong>
+            </div>
+            <div>
+              <span>Data sources</span>
+              <strong>OpenSky + AeroDataBox</strong>
+            </div>
+            <div>
+              <span>Pages scope</span>
+              <strong>Static docs only</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="docs-section" id="setup">
+          <div class="section-heading">
+            <p class="label">Setup</p>
+            <h2>Run the application locally</h2>
+            <p>
+              Start with the example environment file, install dependencies,
+              then launch the Next.js development server.
+            </p>
+          </div>
+
+          <div class="code-card">
+            <div class="code-card-header">
+              <span>Local development</span>
+              <button type="button" data-copy-target="setup-code">Copy</button>
+            </div>
+            <pre id="setup-code"><code>cp .env.local.example .env.local
+npm install
+npm run dev</code></pre>
+          </div>
+
+          <div class="split-grid">
+            <article class="info-block">
+              <h3>Environment variables</h3>
+              <dl>
+                <div>
+                  <dt>OPENSKY_CLIENT_ID</dt>
+                  <dd>Optional OpenSky OAuth client id for higher quota.</dd>
+                </div>
+                <div>
+                  <dt>OPENSKY_CLIENT_SECRET</dt>
+                  <dd>Optional OpenSky OAuth client secret.</dd>
+                </div>
+                <div>
+                  <dt>RAPIDAPI_KEY</dt>
+                  <dd>Optional AeroDataBox key for metadata and route lookup.</dd>
+                </div>
+              </dl>
+            </article>
+
+            <article class="info-block">
+              <h3>Useful checks</h3>
+              <ul class="check-list">
+                <li><code>npm run lint</code> validates the code style.</li>
+                <li><code>npm run build</code> verifies production bundling.</li>
+                <li><code>http://localhost:3000</code> opens the map UI.</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="docs-section" id="how-it-works">
+          <div class="section-heading">
+            <p class="label">How it works</p>
+            <h2>Cache-first live flight intelligence</h2>
+            <p>
+              The app keeps expensive or quota-limited upstream requests behind
+              server routes while the browser stays responsive through local
+              state and manual enrichment actions.
+            </p>
+          </div>
+
+          <div class="flow" aria-label="System flow">
+            <div class="flow-node">Browser map</div>
+            <div class="flow-arrow"></div>
+            <div class="flow-node">/api/stream</div>
+            <div class="flow-arrow"></div>
+            <div class="flow-node">OpenSky cache</div>
+            <div class="flow-arrow"></div>
+            <div class="flow-node">AeroDataBox on demand</div>
+          </div>
+
+          <div class="timeline">
+            <article>
+              <span>01</span>
+              <h3>Map shell mounts</h3>
+              <p>
+                <code>app/page.tsx</code> renders <code>MapShell</code>, which
+                composes the map, stream subscriber, search, status, and panel.
+              </p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>Viewport drives polling</h3>
+              <p>
+                The current map bounding box is stored in Zustand and passed to
+                the stream route for server-side filtering.
+              </p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>OpenSky is protected</h3>
+              <p>
+                <code>streamHub</code> keeps a global five-minute snapshot and
+                backs off when upstream rate limits are hit.
+              </p>
+            </article>
+            <article>
+              <span>04</span>
+              <h3>Metadata stays manual</h3>
+              <p>
+                Aircraft details, route endpoints, and flight search use
+                AeroDataBox only after explicit user action.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="docs-section" id="api-calls">
+          <div class="section-heading">
+            <p class="label">API Calls</p>
+            <h2>Internal browser-facing routes</h2>
+            <p>
+              These routes support the application UI. They are useful for
+              debugging and future clients, but they are not versioned as a
+              public API.
+            </p>
+          </div>
+
+          <div class="endpoint-grid">
+            <article class="endpoint-card">
+              <span class="method">GET</span>
+              <h3>/api/stream</h3>
+              <p>Returns cached OpenSky aircraft states, optionally filtered by map bounds.</p>
+              <code>?lamin=45&amp;lomin=5&amp;lamax=55&amp;lomax=15</code>
+            </article>
+            <article class="endpoint-card">
+              <span class="method">GET</span>
+              <h3>/api/aircraft/[icao24]</h3>
+              <p>Loads aircraft registration, model, airline, and image metadata.</p>
+              <code>/api/aircraft/0200eb</code>
+            </article>
+            <article class="endpoint-card">
+              <span class="method">GET</span>
+              <h3>/api/flight-route/[icao24]</h3>
+              <p>Finds a current route by ICAO24, optionally biased by callsign.</p>
+              <code>?callsign=RAM740X</code>
+            </article>
+            <article class="endpoint-card">
+              <span class="method">GET</span>
+              <h3>/api/flight-search</h3>
+              <p>Searches a route by ICAO24-like value, callsign, or flight number.</p>
+              <code>?q=RAM740X</code>
+            </article>
+          </div>
+        </section>
+
+        <section class="docs-section" id="deployment">
+          <div class="section-heading">
+            <p class="label">Deployment</p>
+            <h2>What GitHub Pages publishes here</h2>
+            <p>
+              This repository now includes a Pages workflow that publishes
+              <code>docs-site/</code>. GitHub builds an artifact from those
+              static files and serves it from the repository Pages URL.
+            </p>
+          </div>
+
+          <div class="callout">
+            <h3>Important hosting boundary</h3>
+            <p>
+              GitHub Pages does not run Node.js functions, so it cannot host
+              <code>/api/stream</code> or the AeroDataBox proxy routes. Use Pages
+              for documentation and deploy the actual app to a Node-capable
+              platform such as Vercel, Cloud Run, or Coolify.
+            </p>
+          </div>
+
+          <div class="code-card">
+            <div class="code-card-header">
+              <span>Pages source</span>
+            </div>
+            <pre><code>.github/workflows/pages.yml
+docs-site/index.html
+docs-site/styles.css
+docs-site/app.js</code></pre>
+          </div>
+        </section>
+
+        <section class="docs-section" id="maintenance">
+          <div class="section-heading">
+            <p class="label">Maintenance</p>
+            <h2>Keep docs and behavior aligned</h2>
+            <p>
+              Update this page whenever API contracts, cache TTLs, deployment
+              assumptions, or public product behavior changes.
+            </p>
+          </div>
+
+          <div class="maintenance-grid">
+            <article>
+              <h3>When API routes change</h3>
+              <p>Update the endpoint cards and the deeper notes in <code>docs/integration.md</code>.</p>
+            </article>
+            <article>
+              <h3>When caching changes</h3>
+              <p>Update the architecture flow, operations guide, and README cache summaries.</p>
+            </article>
+            <article>
+              <h3>Before handoff</h3>
+              <p>Run lint and build checks, then manually verify map rendering and route lookup behavior.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
