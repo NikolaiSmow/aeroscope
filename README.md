@@ -21,7 +21,7 @@ AeroScope is a Next.js web app for live aircraft tracking and lightweight flight
 ## Local Development
 
 ```bash
-cp .env.local.example .env.local
+cp .env.example .env
 npm install
 npm run dev
 ```

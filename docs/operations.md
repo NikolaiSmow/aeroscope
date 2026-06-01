@@ -16,9 +16,8 @@ When deploying to Vercel, use the `rumble-ai` team by default unless another tea
 | `OPENSKY_CLIENT_ID` | No | OpenSky OAuth2 API client ID for higher quota than anonymous mode |
 | `OPENSKY_CLIENT_SECRET` | No | OpenSky OAuth2 API client secret |
 | `RAPIDAPI_KEY` | No | AeroDataBox RapidAPI key for metadata and route lookups |
-| `NEXT_PUBLIC_HAS_METADATA_KEY` | No | UI hint flag; set to `1` when `RAPIDAPI_KEY` is configured |
 
-Copy `.env.local.example` to `.env.local` for local development.
+Copy `.env.example` to `.env` for local development. Next.js also supports `.env.local` for untracked machine-local overrides.
 
 ## Cache / Persistence Behavior
 

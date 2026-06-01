@@ -300,7 +300,6 @@ export function AircraftPanel() {
     staleTime: CLIENT_ROUTE_TTL_MS,
   });
 
-  const hasMetadataKey = process.env.NEXT_PUBLIC_HAS_METADATA_KEY === "1";
   const errorMessage = error instanceof Error ? error.message : null;
   const routeErrorMessage = routeError instanceof Error ? routeError.message : null;
   const needsMetadata = !isFetched || isError || (!meta?.model && !meta?.registration);
@@ -371,7 +370,7 @@ export function AircraftPanel() {
       )}
 
       {/* ── Load data CTA ── */}
-      {hasMetadataKey && (needsMetadata || needsRoute) && (
+      {(needsMetadata || needsRoute) && (
         <button
           type="button"
           onClick={() => void loadAeroData()}
@@ -416,7 +415,7 @@ export function AircraftPanel() {
       )}
 
       {/* ── Route ── */}
-      {(route || isRouteFetching || (hasMetadataKey && isRouteFetched)) && (
+      {(route || isRouteFetching || isRouteFetched) && (
         <>
           <SectionLabel>Route</SectionLabel>
           {route && progress !== null && <RouteProgressWidget route={route} progress={progress} />}
@@ -431,12 +430,12 @@ export function AircraftPanel() {
             </div>
           )}
           {isRouteFetching && <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>Loading route...</div>}
-          {hasMetadataKey && !isRouteFetching && isRouteError && (
+          {!isRouteFetching && isRouteError && (
             <div className="mt-2 text-xs" style={{ color: "oklch(0.78 0.14 85)" }}>
               {routeErrorMessage?.includes("429") ? "Rate limited. Wait before retrying." : "No route data for this flight."}
             </div>
           )}
-          {hasMetadataKey && isRouteFetched && !isRouteFetching && !isRouteError && !route && (
+          {isRouteFetched && !isRouteFetching && !isRouteError && !route && (
             <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>No route found.</div>
           )}
         </>
@@ -452,7 +451,7 @@ export function AircraftPanel() {
         <Row label="Manufacturer" value={meta?.productionLine ?? meta?.manufacturer ?? null} />
       </div>
       {isFetching && <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>Loading metadata...</div>}
-      {hasMetadataKey && !isFetching && isError && (
+      {!isFetching && isError && (
         <div className="mt-2 text-xs" style={{ color: "oklch(0.78 0.14 85)" }}>
           {errorMessage?.includes("not subscribed")
             ? "API key not subscribed. Subscribe on RapidAPI."
@@ -461,13 +460,8 @@ export function AircraftPanel() {
               : "No details returned."}
         </div>
       )}
-      {hasMetadataKey && isFetched && !isFetching && !isError && !meta?.model && !meta?.registration && (
+      {isFetched && !isFetching && !isError && !meta?.model && !meta?.registration && (
         <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>No extended metadata available.</div>
-      )}
-      {!hasMetadataKey && (
-        <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-          Set RAPIDAPI_KEY in .env.local for extended metadata.
-        </div>
       )}
 
       <div className="h-6" />
